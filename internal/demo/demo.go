@@ -108,6 +108,10 @@ var stateSpecs = map[string]stateSpec{
 		installed: "3.4-1ubuntu1", latest: "3.4-1ubuntu1", path: "/usr/bin/tmux",
 		provenance: domain.ProvenanceAPT, detail: "System package (apt)",
 	},
+	"byobu": {
+		installed: "6.11", latest: "6.11", path: "/usr/bin/byobu",
+		provenance: domain.ProvenanceAPT, detail: "System package (apt)",
+	},
 	"hive": {
 		installed: "0.1.2", latest: "0.1.2", path: "/usr/local/bin/hive",
 		provenance: domain.ProvenanceExternal, detail: "External binary (/usr/local/bin/hive)",

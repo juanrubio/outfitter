@@ -34,7 +34,7 @@ description = "Complete workstation rig: all coding harnesses, AI TUIs, terminal
 tools = [
   "claude-code", "codex", "muse", "antigravity-cli", "opencode", "pi", "gemini-cli", "copilot-cli",
   "boardwalk", "trailmark", "quotary", "codexbar", "openclaw", "mercadona-cli",
-  "tmux", "hive", "gh", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
+  "tmux", "byobu", "hive", "gh", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
   "zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
   "browser-use", "mcporter", "oracle", "summarize", "wacli", "hcloud", "visidata",
 ]
@@ -47,7 +47,7 @@ description = "Tuned for Ubuntu home servers & Hetzner VPS agent workers (no des
 tools = [
   "claude-code", "codex", "muse", "antigravity-cli", "opencode",
   "boardwalk", "trailmark", "openclaw", "mercadona-cli",
-  "tmux", "hive", "gh", "lazygit", "fzf", "delta", "ripgrep", "fd", "jq", "btop",
+  "tmux", "byobu", "hive", "gh", "lazygit", "fzf", "delta", "ripgrep", "fd", "jq", "btop",
   "zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
   "wacli", "hcloud", "visidata",
 ]
@@ -299,6 +299,22 @@ update_cmd = "sudo apt-get install --only-upgrade -y tmux"
 remove_cmd = "sudo apt-get remove -y tmux"
 version_args = ["-V"]
 version_regex = 'tmux ([0-9][0-9A-Za-z.~+-]*)'
+
+[[tools]]
+id = "byobu"
+name = "Byobu"
+binary = "byobu"
+category = "terminal"
+backend = "apt"
+package = "byobu"
+sudo = true
+profiles = ["desktop", "server"]
+description = "Text-based window manager and terminal multiplexer wrapper for tmux."
+install_cmd = "sudo apt-get install -y byobu"
+update_cmd = "sudo apt-get install --only-upgrade -y byobu"
+remove_cmd = "sudo apt-get remove -y byobu"
+version_args = ["--version"]
+version_regex = 'byobu version ([0-9]+\.[0-9]+(?:\.[0-9]+)?)'
 
 [[tools]]
 id = "hive"

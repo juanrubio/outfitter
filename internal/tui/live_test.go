@@ -218,7 +218,7 @@ func TestStartupShowsRefreshProgressAndSpinner(t *testing.T) {
 	m.Update(spinnerTickMsg{})
 
 	midView := m.View().Content
-	if !strings.Contains(midView, "Checking upstream versions…") || !strings.Contains(midView, "1/39 checked") {
+	if !strings.Contains(midView, "Checking upstream versions…") || !strings.Contains(midView, "1/40 checked") {
 		t.Fatalf("mid-refresh view missing progress counter:\n%s", midView)
 	}
 	if !strings.Contains(midView, "2.1.289") || !strings.Contains(midView, "→ 2.1.290") {
