@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"golang.org/x/term"
 
+	"github.com/juanrubio/outfitter/internal/adapter"
 	"github.com/juanrubio/outfitter/internal/catalog"
 	"github.com/juanrubio/outfitter/internal/demo"
 	"github.com/juanrubio/outfitter/internal/domain"
+	"github.com/juanrubio/outfitter/internal/engine"
 	"github.com/juanrubio/outfitter/internal/theme"
 )
 
@@ -58,8 +61,28 @@ type StepProgressMsg struct {
 	Log     []string
 }
 
+type liveStepMsg struct {
+	event engine.StepEvent
+}
+
+type livePlanDoneMsg struct {
+	result engine.PlanResult
+}
+
+type liveStreamClosedMsg struct{}
+
+type refreshDoneMsg struct {
+	states map[string]domain.ToolState
+	err    error
+}
+
+type sudoVerifiedMsg struct {
+	err error
+}
+
 // Options configures a TUI session. Tests may supply a catalog and state
-// directly and render the model without a real terminal.
+// directly and render the model without a real terminal. In live mode,
+// OnRefresh and OnExecute replace the default engine Inspector and Runner.
 type Options struct {
 	Demo           bool
 	CatalogPath    string
@@ -72,6 +95,8 @@ type Options struct {
 	MiseInstalled  bool
 	MiseVersion    string
 	PlatformNotice string
+	OnRefresh      func(context.Context) (map[string]domain.ToolState, error)
+	OnExecute      func(context.Context, domain.ActionPlan, func(engine.StepEvent)) engine.PlanResult
 }
 
 // Model is the Bubble Tea model for the catalog and inspector layouts.
@@ -102,6 +127,15 @@ type Model struct {
 	activeProfileID string
 	profileCursor   int
 	execSteps       []executionStep
+
+	baseCtx     context.Context
+	autoRefresh bool
+	onRefresh   func(context.Context) (map[string]domain.ToolState, error)
+	onExecute   func(context.Context, domain.ActionPlan, func(engine.StepEvent)) engine.PlanResult
+	execCancel  context.CancelFunc
+	liveEvents  chan engine.StepEvent
+	liveResult  *engine.PlanResult
+	lastLogPath string
 }
 
 // NewModel builds a model with defaults suitable for the offline demo or a
@@ -131,6 +165,10 @@ func NewModel(opts Options) (*Model, error) {
 		miseVersion:     opts.MiseVersion,
 		demo:            opts.Demo,
 		activeProfileID: "desktop",
+		baseCtx:         context.Background(),
+		autoRefresh:     !opts.Demo && opts.States == nil,
+		onRefresh:       opts.OnRefresh,
+		onExecute:       opts.OnExecute,
 	}
 
 	if opts.Demo {
@@ -202,13 +240,20 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
+	m.baseCtx = ctx
 	p := tea.NewProgram(m, tea.WithContext(ctx))
 	_, err = p.Run()
 	return err
 }
 
-// Init implements tea.Model.
-func (m *Model) Init() tea.Cmd { return nil }
+// Init implements tea.Model. Live sessions with no supplied snapshot start a
+// local inspection immediately; the demo remains fully offline.
+func (m *Model) Init() tea.Cmd {
+	if m.demo || !m.autoRefresh {
+		return nil
+	}
+	return m.refreshCmd()
+}
 
 // View implements tea.Model.
 func (m *Model) View() tea.View {
@@ -232,6 +277,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StepProgressMsg:
 		m.applyStepProgress(msg)
 		return m, nil
+	case liveStepMsg:
+		m.applyLiveEvent(msg.event)
+		return m, waitForLiveEvent(m.liveEvents)
+	case livePlanDoneMsg:
+		m.finishLiveExecution(msg.result)
+		return m, nil
+	case liveStreamClosedMsg:
+		m.liveEvents = nil
+		return m, nil
+	case refreshDoneMsg:
+		m.applyRefresh(msg)
+		return m, nil
+	case sudoVerifiedMsg:
+		return m.handleSudoVerified(msg)
 	case tea.KeyPressMsg:
 		return m.updateKey(msg)
 	default:
@@ -242,6 +301,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keystroke := key.String()
 	if keystroke == "ctrl+c" {
+		m.cancelExecution()
 		return m, tea.Quit
 	}
 	if m.editing {
@@ -250,6 +310,7 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.confirmQuit {
 		switch keystroke {
 		case "q", "y":
+			m.cancelExecution()
 			return m, tea.Quit
 		case "esc", "n":
 			m.confirmQuit = false
@@ -264,8 +325,13 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "plan":
 		return m.updatePlanKey(key)
 	case "applying":
-		if keystroke == "esc" || keystroke == "q" {
+		switch keystroke {
+		case "esc", "q":
 			m.view = "catalog"
+		case "l":
+			if m.lastLogPath != "" {
+				m.notice = "Execution log: " + m.lastLogPath
+			}
 		}
 		return m, nil
 	case "help":
@@ -286,6 +352,7 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch keystroke {
 	case "q":
 		if m.plan.IsEmpty() {
+			m.cancelExecution()
 			return m, tea.Quit
 		}
 		m.confirmQuit = true
@@ -325,7 +392,12 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "b":
 		m.toggleBootstrap()
 	case "r", "R":
-		m.notice = "Upstream versions verified just now"
+		if m.demo {
+			m.notice = "Upstream versions verified just now"
+			return m, nil
+		}
+		m.notice = "Refreshing installed and upstream tool state…"
+		return m, m.refreshCmd()
 	case "c":
 		m.notice = fmt.Sprintf("Catalog: embedded default (%d tools) + ~/.config/outfitter/catalog.toml", len(m.catalog.Tools))
 	case "p":
@@ -400,8 +472,7 @@ func (m *Model) updatePlanKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "esc", "n", "q":
 		m.view = "catalog"
 	case "enter", "y":
-		m.startExecution()
-		m.view = "applying"
+		return m.beginExecution()
 	case "u":
 		m.queueAllUpdates()
 	}
@@ -751,6 +822,184 @@ func (m *Model) startExecution() {
 			logs:    []string{"$ " + step.Command},
 		})
 	}
+}
+
+// beginExecution prepares the progress rows and either advances the offline
+// demo or launches the live runner (after the sudo pre-flight when required).
+func (m *Model) beginExecution() (tea.Model, tea.Cmd) {
+	m.startExecution()
+	m.view = "applying"
+	if m.demo || len(m.execSteps) == 0 {
+		return m, nil
+	}
+	if m.plan.NeedsSudo() {
+		m.notice = "Verifying sudo credentials before running apt steps…"
+		return m, tea.ExecProcess(adapter.VerifySudoCommand(), func(err error) tea.Msg {
+			return sudoVerifiedMsg{err: err}
+		})
+	}
+	return m, m.startLiveExecution()
+}
+
+func (m *Model) handleSudoVerified(msg sudoVerifiedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.view = "plan"
+		m.notice = "sudo verification failed: " + msg.err.Error()
+		return m, nil
+	}
+	m.view = "applying"
+	m.notice = "sudo verified"
+	return m, m.startLiveExecution()
+}
+
+func (m *Model) startLiveExecution() tea.Cmd {
+	if m.liveEvents != nil {
+		return nil
+	}
+	ctx := m.baseCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	m.execCancel = cancel
+
+	events := make(chan engine.StepEvent, 256)
+	m.liveEvents = events
+	plan := m.plan
+	execute := m.onExecute
+	if execute == nil {
+		execute = func(
+			ctx context.Context,
+			plan domain.ActionPlan,
+			onEvent func(engine.StepEvent),
+		) engine.PlanResult {
+			return engine.NewRunner(engine.RunnerOptions{}).Run(ctx, plan, onEvent)
+		}
+	}
+
+	runCmd := func() tea.Msg {
+		result := execute(runCtx, plan, func(event engine.StepEvent) {
+			select {
+			case events <- event:
+			case <-runCtx.Done():
+			}
+		})
+		cancel()
+		close(events)
+		return livePlanDoneMsg{result: result}
+	}
+	return tea.Batch(runCmd, waitForLiveEvent(events))
+}
+
+func waitForLiveEvent(events <-chan engine.StepEvent) tea.Cmd {
+	if events == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		event, ok := <-events
+		if !ok {
+			return liveStreamClosedMsg{}
+		}
+		return liveStepMsg{event: event}
+	}
+}
+
+func (m *Model) applyLiveEvent(event engine.StepEvent) {
+	status := StepRunning
+	switch event.Status {
+	case string(engine.StepStatusDone):
+		status = StepDone
+	case string(engine.StepStatusFailed):
+		status = StepFailed
+	}
+
+	logs := make([]string, 0, 2)
+	if event.Line != "" {
+		logs = append(logs, event.Line)
+	}
+	elapsed := ""
+	if status == StepDone || status == StepFailed {
+		elapsed = formatStepDuration(event.Duration)
+	}
+	if status == StepDone && event.Line == "" {
+		logs = append(logs, "✓ "+event.Step.Tool.Name+" completed")
+	}
+	if status == StepFailed {
+		message := "✗ " + event.Step.Tool.Name + " failed"
+		if event.Err != nil {
+			message += ": " + event.Err.Error()
+		}
+		logs = append(logs, message)
+	}
+
+	m.applyStepProgress(StepProgressMsg{
+		Index:   event.StepIndex,
+		Status:  status,
+		Elapsed: elapsed,
+		Log:     logs,
+	})
+}
+
+func (m *Model) finishLiveExecution(result engine.PlanResult) {
+	m.liveResult = &result
+	m.lastLogPath = result.LogPath
+	m.execCancel = nil
+	if result.LogPath != "" {
+		m.notice = fmt.Sprintf("Execution finished: %d succeeded, %d failed · log %s",
+			result.Succeeded(), result.Failed(), result.LogPath)
+		return
+	}
+	m.notice = fmt.Sprintf("Execution finished: %d succeeded, %d failed",
+		result.Succeeded(), result.Failed())
+}
+
+func (m *Model) cancelExecution() {
+	if m.execCancel != nil {
+		m.execCancel()
+		m.execCancel = nil
+	}
+}
+
+func (m *Model) refreshCmd() tea.Cmd {
+	ctx := m.baseCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	refresh := m.onRefresh
+	if refresh == nil {
+		refresh = func(ctx context.Context) (map[string]domain.ToolState, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			inspector := engine.NewInspector("")
+			states := inspector.InspectLocal(ctx, m.catalog)
+			return inspector.InspectUpstream(ctx, m.catalog, states, nil), nil
+		}
+	}
+	return func() tea.Msg {
+		states, err := refresh(ctx)
+		return refreshDoneMsg{states: states, err: err}
+	}
+}
+
+func (m *Model) applyRefresh(msg refreshDoneMsg) {
+	if msg.err != nil {
+		m.notice = "Refresh failed: " + msg.err.Error()
+		return
+	}
+	if msg.states != nil {
+		m.states = cloneStates(msg.states)
+	}
+	m.rebuildPlan()
+	m.ensureSelection()
+	m.notice = "Installed and upstream state refreshed"
+}
+
+func formatStepDuration(duration time.Duration) string {
+	if duration <= 0 {
+		return "0.0s"
+	}
+	return duration.Round(100 * time.Millisecond).String()
 }
 
 // AdvanceExecution advances the deterministic demo execution by one step.

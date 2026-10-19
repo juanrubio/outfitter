@@ -12,7 +12,7 @@ after its exit gate passes and a review record is written under
 | 2 | Theme System, Demo Backend, and TUI Layouts | Complete | `make check`, `make race`, `make build` |
 | 3 | TUI State Machine, Modals, and Golden Tests | Complete | `make check`, `make race`, `make build` |
 | 4 | State Discovery, Version Inspector, and `mise` Bootstrapper | Complete | `make check`, `make race`, `make build` |
-| 5 | Execution Adapters and Live Runner | Not started | — |
+| 5 | Execution Adapters and Live Runner | Complete | `make check`, `make race`, `make build` |
 | 6 | Non-Interactive CLI, VHS Tapes, and Release Hardening | Not started | — |
 
 ## Phase 0 Evidence
@@ -119,6 +119,53 @@ after its exit gate passes and a review record is written under
   vendor/source preservation, worker-pool concurrency, update callbacks, and
   cache round-trips. No test makes a real network request or depends on host
   binaries.
+- Verification: `make check`, `make race`, and `make build` exit 0.
+
+## Phase 5 Evidence
+
+- `internal/adapter` translates `domain.PlanStep` values into ordered
+  `CommandSpec` invocations. It covers `mise:aqua`, `mise:ubi`, `mise:github`,
+  `mise:npm`, `uv`, `apt`, `vendor`, and `source` backends for install, update,
+  and remove actions.
+- The mise adapter resolves `mise` from `PATH`, `~/.local/bin/mise`, or the
+  `mise` command name; prepends `mise use --global node@lts` once per run before
+  npm tool changes; prepends `mise use --global uv@latest` once per run before
+  uv tool changes; and emits `mise use`, `mise upgrade`, `mise unuse`, and
+  `mise x uv -- uv tool ...` command arguments without a shell.
+- The apt adapter builds `sudo apt-get install`, `--only-upgrade`, and `remove`
+  commands plus `VerifySudoCommand()` for the TUI `tea.ExecProcess` handoff.
+- The vendor adapter runs configured vendor commands through
+  `bash -o pipefail -c` and implements the native CodexBar bundle installer:
+  release archive discovery (overridable `ArchiveURL`, GitHub API base URL, and
+  HTTP client), tar.gz extraction of `CodexBarCLI` and `*.bundle` resources into
+  `<home>/.local/share/outfitter/codexbar/`, `0755` executable permissions, and
+  the `<home>/.local/bin/codexbar` symlink. Removal deletes both paths.
+- The source adapter expands `~/` source and install paths, runs `go build` in
+  the repository with output at `<home>/.local/bin/<binary>` (or a custom
+  `build_cmd`), and removes the installed binary on uninstall.
+- `internal/engine/runner.go` executes plans with a streaming `StepEvent` API,
+  `StepResult`/`PlanResult` summaries, per-tool failure isolation, fail-fast
+  dependency errors after a failed mise bootstrap, and independent apt/vendor/
+  source execution.
+- The default `ProcessExecutor` uses `MiseEnv`, per-command environments, direct
+  argv execution (no shell), `Setpgid` process groups, and a `cmd.Cancel` group
+  kill so cancellation terminates children and grandchildren. Combined stdout
+  and stderr are streamed line by line and written to
+  `<home>/.local/state/outfitter/logs/run-<YYYYMMDD-HHMMSS>.log` with `0644`
+  permissions, timestamps, exact commands, durations, exit codes, and summary.
+- `internal/tui` separates the deterministic demo timer from live execution:
+  `Options.OnRefresh`/`OnExecute` accept injected engine callbacks, live mode
+  defaults to the real `engine.Inspector` and `engine.Runner`, streams runner
+  events into the existing progress view, verifies sudo through
+  `tea.ExecProcess`, exposes the log path with `l`, and cancels the runner on
+  quit.
+- Offline tests verify exact commands and prerequisites for every backend and
+  action, CodexBar archive extraction/symlink layout and GitHub asset
+  resolution with `httptest.Server`, source path expansion, mise environment
+  `PATH`, streaming stdout/stderr events, per-tool failure isolation and
+  structured logs, mise bootstrap dependency failures, and process-group
+  cancellation of a child and grandchild. No test uses the public network or
+  depends on host-installed tools.
 - Verification: `make check`, `make race`, and `make build` exit 0.
 
 ## Phase Status Legend
