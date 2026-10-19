@@ -38,8 +38,13 @@ func TestHelp(t *testing.T) {
 func TestFlagsRegistered(t *testing.T) {
 	cmd := NewRootCmd()
 	for _, name := range []string{"demo", "catalog", "version"} {
-		if cmd.Flags().Lookup(name) == nil {
+		if cmd.Flag(name) == nil {
 			t.Fatalf("--%s flag is missing", name)
+		}
+	}
+	for _, name := range []string{"demo", "catalog"} {
+		if cmd.PersistentFlags().Lookup(name) == nil {
+			t.Fatalf("--%s must be a persistent flag", name)
 		}
 	}
 }

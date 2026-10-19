@@ -21,6 +21,8 @@ live under `docs/`.
   end-to-end implementation and review prompt.
 - [Implementation Progress](evidence/implementation-progress.md) — Phase status
   and verification evidence.
+- [Requirements Traceability](evidence/traceability.md) — Product and TUI
+  requirements mapped to implementation files and offline tests.
 
 ## Visual Reference
 

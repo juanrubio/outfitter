@@ -13,7 +13,7 @@ after its exit gate passes and a review record is written under
 | 3 | TUI State Machine, Modals, and Golden Tests | Complete | `make check`, `make race`, `make build` |
 | 4 | State Discovery, Version Inspector, and `mise` Bootstrapper | Complete | `make check`, `make race`, `make build` |
 | 5 | Execution Adapters and Live Runner | Complete | `make check`, `make race`, `make build` |
-| 6 | Non-Interactive CLI, VHS Tapes, and Release Hardening | Not started | — |
+| 6 | Non-Interactive CLI, VHS Tapes, and Release Hardening | Complete | `make check`, `make race`, `make all`, CLI integration tests |
 
 ## Phase 0 Evidence
 
@@ -167,6 +167,38 @@ after its exit gate passes and a review record is written under
   cancellation of a child and grandchild. No test uses the public network or
   depends on host-installed tools.
 - Verification: `make check`, `make race`, and `make build` exit 0.
+
+## Phase 6 Evidence
+
+- `internal/cli` implements the complete non-interactive command tree: root
+  TUI launch, `status`, `check`, `profile list`/`apply`, `install`, `update`,
+  `remove`, `catalog export`, and the hidden `internal-bootstrap mise` helper.
+  `--demo`, `--catalog`, `--json`, `--dry-run`, and `--yes` are wired through
+  every relevant command.
+- `internal/cli/deps.go` provides injectable `Deps` with `NewRootCmdWithDeps`
+  for fully offline tests. Defaults use the live inspector, runner, TUI, and
+  `mise` finder; demo execution uses a deterministic no-op runner.
+- Deterministic exit codes follow the product contract via `ExitError` and
+  `ExitCode`: `0` success, `1` execution failures, `2` usage errors,
+  non-interactive mutation refusal, and interactive confirmation refusal.
+  `cmd/outfitter/main.go` prints the error and exits with `cli.ExitCode(err)`.
+- `status` merges cached upstream versions from
+  `~/.cache/outfitter/state.json`; `check` refreshes local and upstream state,
+  writes the cache outside demo mode, and supports human/JSON summaries.
+- Mutating commands print the exact plan and `$ <command>` lines, stream
+  progress for confirmed runs, emit structured JSON results (`plan`, `steps`,
+  `succeeded`, `failed`, `log_path`), and isolate partial failures behind exit
+  code `1`.
+- `tapes/showcase.tape` records the deterministic `./outfitter --demo` tour at
+  1440×900 with a dark theme, including navigation, category jumps, profile
+  cycling (`]`), update queuing (`u`), Plan & Apply (`Enter`), simulated
+  execution, help (`?`), theme cycling (`t`), and quit (`q`).
+- `docs/evidence/traceability.md` maps every product and TUI requirement to
+  implementation files and passing tests. `internal/cli/cli_test.go` covers
+  human/JSON output, dry runs, confirmation refusal, confirmed success and
+  failure, unknown tools/profiles, cache merging, demo isolation, and catalog
+  export round-trips.
+- Verification: `make check`, `make race`, and `make all` exit 0.
 
 ## Phase Status Legend
 

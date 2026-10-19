@@ -391,6 +391,8 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case "b":
 		m.toggleBootstrap()
+	case "t":
+		m.cycleTheme()
 	case "r", "R":
 		if m.demo {
 			m.notice = "Upstream versions verified just now"
@@ -403,6 +405,8 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "p":
 		m.view = "profiles"
 		m.profileCursor = m.activeProfileIndex()
+	case "]":
+		m.cycleProfile()
 	case "a":
 		m.view = "plan"
 	case "?":
@@ -747,6 +751,28 @@ func (m *Model) toggleBootstrap() {
 	}
 	m.rebuildPlan()
 	m.ensureSelection()
+}
+
+func (m *Model) cycleTheme() {
+	order := []theme.Mode{theme.ModeDark, theme.ModeLight, theme.ModeMono}
+	next := theme.ModeDark
+	for index, mode := range order {
+		if mode == m.mode {
+			next = order[(index+1)%len(order)]
+			break
+		}
+	}
+	m.mode = next
+	m.styles = theme.NewStyles(next)
+	m.notice = "Theme: " + string(next)
+}
+
+func (m *Model) cycleProfile() {
+	if len(m.catalog.Profiles) == 0 {
+		return
+	}
+	m.profileCursor = (m.activeProfileIndex() + 1) % len(m.catalog.Profiles)
+	m.applySelectedProfile()
 }
 
 func (m *Model) activeProfileIndex() int {

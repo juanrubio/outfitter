@@ -77,9 +77,19 @@ func ExportDefault() string {
 
 // LoadDefault parses and returns the embedded catalog without user overrides.
 func LoadDefault() (*Catalog, error) {
-	var raw defaultFile
-	if err := toml.Unmarshal([]byte(defaultCatalogTOML), &raw); err != nil {
+	cat, err := ParseCatalog([]byte(defaultCatalogTOML))
+	if err != nil {
 		return nil, fmt.Errorf("parse embedded catalog: %w", err)
+	}
+	return cat, nil
+}
+
+// ParseCatalog parses a complete catalog TOML document, applies defaults, and
+// validates the resulting catalog. It never merges the embedded defaults.
+func ParseCatalog(data []byte) (*Catalog, error) {
+	var raw defaultFile
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parse catalog: %w", err)
 	}
 
 	settings := domain.DefaultSettings()
