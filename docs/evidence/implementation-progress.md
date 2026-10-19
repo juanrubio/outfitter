@@ -11,7 +11,7 @@ after its exit gate passes and a review record is written under
 | 1 | Domain Model, Embedded Catalog, and `catalog.toml` Merger | Complete | `make check`, `make race`, `make build` |
 | 2 | Theme System, Demo Backend, and TUI Layouts | Complete | `make check`, `make race`, `make build` |
 | 3 | TUI State Machine, Modals, and Golden Tests | Complete | `make check`, `make race`, `make build` |
-| 4 | State Discovery, Version Inspector, and `mise` Bootstrapper | Not started | — |
+| 4 | State Discovery, Version Inspector, and `mise` Bootstrapper | Complete | `make check`, `make race`, `make build` |
 | 5 | Execution Adapters and Live Runner | Not started | — |
 | 6 | Non-Interactive CLI, VHS Tapes, and Release Hardening | Not started | — |
 
@@ -84,6 +84,41 @@ after its exit gate passes and a review record is written under
   application, plan/apply transitions, missing `mise` bootstrap, help, quit
   safety, and exact screen geometry for `catalog`, `profiles`, `plan`,
   `applying`, `help`, and `detail` at `120×40` and `80×24`.
+- Verification: `make check`, `make race`, and `make build` exit 0.
+
+## Phase 4 Evidence
+
+- `internal/engine/bootstrap.go` implements `FindMise`, `MiseEnv`, and a
+  fail-closed `BootstrapMise`: releases are downloaded from an overridable
+  `BaseURL`, matched against `SHASUMS256.txt`, verified with SHA-256, extracted
+  with zip-slip and decompression-bomb guards, installed atomically as
+  `<install-dir>/mise` with `0755` permissions, and optionally smoke-tested
+  through `mise --version`.
+- `internal/engine/inspector.go` performs a local scan across
+  `mise ls --installed --json` (map-of-slices, map-of-objects, and slice
+  formats), `PATH` and `~/.local/bin` fallbacks, symlink target provenance
+  (`mise`, `uv`, outfitter vendor bundles), `dpkg-query`, `.muse-version`, and
+  per-tool version regexes.
+  It normalizes `v` prefixes, Debian epochs, and Debian revisions so installed
+  and upstream versions compare consistently.
+- `InspectUpstream` uses a bounded worker pool (default four), borrows
+  `gh auth token` once for GitHub API requests, prefers `mise latest`, and
+  falls back to the npm registry, GitHub Releases, PyPI, and `apt-cache policy`
+  without `sudo`. Vendor and source tools preserve known state when no upstream
+  source applies rather than reporting false errors, and `onUpdate` is invoked
+  from a single goroutine as each tool completes.
+- `internal/engine/cache.go` persists `~/.cache/outfitter/state.json` through a
+  temporary file in the destination directory followed by an atomic rename,
+  with `0755` parent directories and `0644` snapshots. Missing and corrupt
+  caches return explicit errors alongside an empty snapshot.
+- Offline tests in `internal/engine/*_test.go` cover successful SHA-256 verified
+  installs, checksum mismatches, missing checksum entries, HTTP 404/500
+  responses, unsupported platforms, corrupt archives, path traversal, all
+  backend provenance paths, version normalization, slice-format `mise` output,
+  GitHub token injection, npm/PyPI/apt fallbacks, `mise latest` parsing,
+  vendor/source preservation, worker-pool concurrency, update callbacks, and
+  cache round-trips. No test makes a real network request or depends on host
+  binaries.
 - Verification: `make check`, `make race`, and `make build` exit 0.
 
 ## Phase Status Legend
