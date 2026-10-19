@@ -164,3 +164,77 @@ func TestLiveRefreshUsesInjectedInspector(t *testing.T) {
 		t.Fatalf("notice = %q", m.notice)
 	}
 }
+
+func TestStartupShowsRefreshProgressAndSpinner(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("HOME", t.TempDir())
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := NewModel(Options{
+		Catalog: cat,
+		Width:   120,
+		Height:  40,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.refreshing {
+		t.Fatal("expected live model without explicit states to start in refreshing state")
+	}
+
+	initialView := m.View().Content
+	if !strings.Contains(initialView, "Scanning local tools…") {
+		t.Fatalf("initial view missing scanning progress bar:\n%s", initialView)
+	}
+	if !strings.Contains(initialView, "checking…") {
+		t.Fatalf("initial view missing per-row checking spinner:\n%s", initialView)
+	}
+
+	// Simulate local scan completion and incremental upstream check progress.
+	m.Update(refreshProgressMsg{
+		phase: "Checking upstream versions…",
+		states: map[string]domain.ToolState{
+			"claude-code": {
+				InstalledVersion: "2.1.289",
+				CheckStatus:      domain.StatusChecking,
+			},
+		},
+		total: len(cat.Tools),
+	})
+	m.Update(refreshProgressMsg{
+		phase:  "Checking upstream versions…",
+		toolID: "claude-code",
+		state: domain.ToolState{
+			InstalledVersion: "2.1.289",
+			LatestVersion:    "2.1.290",
+			CheckStatus:      domain.StatusReady,
+		},
+		checked: 1,
+		total:   len(cat.Tools),
+	})
+	m.Update(spinnerTickMsg{})
+
+	midView := m.View().Content
+	if !strings.Contains(midView, "Checking upstream versions…") || !strings.Contains(midView, "1/39 checked") {
+		t.Fatalf("mid-refresh view missing progress counter:\n%s", midView)
+	}
+	if !strings.Contains(midView, "2.1.289 → 2.1.290") {
+		t.Fatalf("mid-refresh view did not update claude-code row incrementally:\n%s", midView)
+	}
+
+	m.Update(refreshDoneMsg{
+		states: map[string]domain.ToolState{
+			"claude-code": {
+				InstalledVersion: "2.1.289",
+				LatestVersion:    "2.1.290",
+				CheckStatus:      domain.StatusReady,
+			},
+		},
+	})
+	if m.refreshing {
+		t.Fatal("expected refreshing to be false after refreshDoneMsg")
+	}
+}

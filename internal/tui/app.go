@@ -71,10 +71,25 @@ type livePlanDoneMsg struct {
 
 type liveStreamClosedMsg struct{}
 
+type refreshProgressMsg struct {
+	phase   string
+	toolID  string
+	state   domain.ToolState
+	states  map[string]domain.ToolState
+	checked int
+	total   int
+}
+
+type refreshStreamClosedMsg struct{}
+
 type refreshDoneMsg struct {
 	states map[string]domain.ToolState
 	err    error
 }
+
+type spinnerTickMsg struct{}
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 type sudoVerifiedMsg struct {
 	err error
@@ -128,14 +143,20 @@ type Model struct {
 	profileCursor   int
 	execSteps       []executionStep
 
-	baseCtx     context.Context
-	autoRefresh bool
-	onRefresh   func(context.Context) (map[string]domain.ToolState, error)
-	onExecute   func(context.Context, domain.ActionPlan, func(engine.StepEvent)) engine.PlanResult
-	execCancel  context.CancelFunc
-	liveEvents  chan engine.StepEvent
-	liveResult  *engine.PlanResult
-	lastLogPath string
+	baseCtx        context.Context
+	autoRefresh    bool
+	refreshing     bool
+	refreshPhase   string
+	refreshChecked int
+	refreshTotal   int
+	spinnerIdx     int
+	refreshEvents  chan refreshProgressMsg
+	onRefresh      func(context.Context) (map[string]domain.ToolState, error)
+	onExecute      func(context.Context, domain.ActionPlan, func(engine.StepEvent)) engine.PlanResult
+	execCancel     context.CancelFunc
+	liveEvents     chan engine.StepEvent
+	liveResult     *engine.PlanResult
+	lastLogPath    string
 }
 
 // NewModel builds a model with defaults suitable for the offline demo or a
@@ -209,6 +230,17 @@ func NewModel(opts Options) (*Model, error) {
 	}
 	if m.states == nil {
 		m.states = make(map[string]domain.ToolState)
+		if m.autoRefresh && m.onRefresh == nil {
+			if cachePath := engine.DefaultCachePath(""); cachePath != "" {
+				if cached, err := engine.LoadCache(cachePath); err == nil && len(cached.States) > 0 {
+					m.states = cloneStates(cached.States)
+				}
+			}
+			_, miseFound := engine.FindMise(nil, "")
+			if miseFound {
+				m.miseInstalled = true
+			}
+		}
 	}
 	if m.actions == nil {
 		m.actions = make(map[string]domain.DesiredAction)
@@ -221,6 +253,10 @@ func NewModel(opts Options) (*Model, error) {
 	}
 	if _, ok := m.catalog.ProfileByID(m.activeProfileID); !ok && len(m.catalog.Profiles) > 0 {
 		m.activeProfileID = m.catalog.Profiles[0].ID
+	}
+
+	if m.autoRefresh {
+		m.beginRefreshState()
 	}
 
 	m.rebuildPlan()
@@ -252,7 +288,7 @@ func (m *Model) Init() tea.Cmd {
 	if m.demo || !m.autoRefresh {
 		return nil
 	}
-	return m.refreshCmd()
+	return m.startRefresh()
 }
 
 // View implements tea.Model.
@@ -286,9 +322,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case liveStreamClosedMsg:
 		m.liveEvents = nil
 		return m, nil
+	case refreshProgressMsg:
+		m.applyRefreshProgress(msg)
+		return m, waitForRefreshEvent(m.refreshEvents)
+	case refreshStreamClosedMsg:
+		m.refreshEvents = nil
+		return m, nil
 	case refreshDoneMsg:
 		m.applyRefresh(msg)
 		return m, nil
+	case spinnerTickMsg:
+		if !m.refreshing {
+			return m, nil
+		}
+		m.spinnerIdx = (m.spinnerIdx + 1) % len(spinnerFrames)
+		return m, spinnerTickCmd()
 	case sudoVerifiedMsg:
 		return m.handleSudoVerified(msg)
 	case tea.KeyPressMsg:
@@ -398,8 +446,7 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.notice = "Upstream versions verified just now"
 			return m, nil
 		}
-		m.notice = "Refreshing installed and upstream tool state…"
-		return m, m.refreshCmd()
+		return m, m.startRefresh()
 	case "c":
 		m.notice = fmt.Sprintf("Catalog: embedded default (%d tools) + ~/.config/outfitter/catalog.toml", len(m.catalog.Tools))
 	case "p":
@@ -986,35 +1033,148 @@ func (m *Model) cancelExecution() {
 	}
 }
 
-func (m *Model) refreshCmd() tea.Cmd {
+func spinnerTickCmd() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg {
+		return spinnerTickMsg{}
+	})
+}
+
+func (m *Model) spinnerFrame() string {
+	if len(spinnerFrames) == 0 {
+		return "⠋"
+	}
+	return spinnerFrames[m.spinnerIdx%len(spinnerFrames)]
+}
+
+func (m *Model) beginRefreshState() {
+	m.refreshing = true
+	m.refreshPhase = "Scanning local tools…"
+	m.refreshChecked = 0
+	m.refreshTotal = len(m.catalog.Tools)
+	for _, tool := range m.catalog.Tools {
+		state := m.states[tool.ID]
+		state.CheckStatus = domain.StatusChecking
+		m.states[tool.ID] = state
+	}
+}
+
+func (m *Model) startRefresh() tea.Cmd {
+	if m.refreshEvents != nil {
+		return nil
+	}
+	m.beginRefreshState()
 	ctx := m.baseCtx
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	refresh := m.onRefresh
-	if refresh == nil {
-		refresh = func(ctx context.Context) (map[string]domain.ToolState, error) {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			inspector := engine.NewInspector("")
-			states := inspector.InspectLocal(ctx, m.catalog)
-			return inspector.InspectUpstream(ctx, m.catalog, states, nil), nil
+
+	if m.onRefresh != nil {
+		refresh := m.onRefresh
+		return func() tea.Msg {
+			states, err := refresh(ctx)
+			return refreshDoneMsg{states: states, err: err}
 		}
 	}
+
+	total := len(m.catalog.Tools)
+	events := make(chan refreshProgressMsg, total*2+8)
+	m.refreshEvents = events
+	cat := m.catalog
+	initialCached := cloneStates(m.states)
+
+	runCmd := func() tea.Msg {
+		defer close(events)
+		if err := ctx.Err(); err != nil {
+			return refreshDoneMsg{err: err}
+		}
+		inspector := engine.NewInspector("")
+		localStates := inspector.InspectLocal(ctx, cat)
+		for id, state := range localStates {
+			if cached, ok := initialCached[id]; ok && state.LatestVersion == "" && cached.LatestVersion != "" {
+				state.LatestVersion = cached.LatestVersion
+			}
+			state.CheckStatus = domain.StatusChecking
+			localStates[id] = state
+		}
+		select {
+		case events <- refreshProgressMsg{
+			phase:  "Checking upstream versions…",
+			states: cloneStates(localStates),
+			total:  total,
+		}:
+		case <-ctx.Done():
+			return refreshDoneMsg{err: ctx.Err()}
+		}
+
+		checked := 0
+		finalStates := inspector.InspectUpstream(ctx, cat, localStates, func(toolID string, state domain.ToolState) {
+			checked++
+			select {
+			case events <- refreshProgressMsg{
+				phase:   "Checking upstream versions…",
+				toolID:  toolID,
+				state:   state,
+				checked: checked,
+				total:   total,
+			}:
+			case <-ctx.Done():
+			}
+		})
+		if cachePath := engine.DefaultCachePath(""); cachePath != "" {
+			_ = engine.SaveCache(cachePath, engine.CacheSnapshot{States: finalStates})
+		}
+		return refreshDoneMsg{states: finalStates}
+	}
+
+	return tea.Batch(runCmd, waitForRefreshEvent(events), spinnerTickCmd())
+}
+
+func waitForRefreshEvent(events <-chan refreshProgressMsg) tea.Cmd {
+	if events == nil {
+		return nil
+	}
 	return func() tea.Msg {
-		states, err := refresh(ctx)
-		return refreshDoneMsg{states: states, err: err}
+		msg, ok := <-events
+		if !ok {
+			return refreshStreamClosedMsg{}
+		}
+		return msg
 	}
 }
 
+func (m *Model) applyRefreshProgress(msg refreshProgressMsg) {
+	if msg.phase != "" {
+		m.refreshPhase = msg.phase
+	}
+	if msg.total > 0 {
+		m.refreshTotal = msg.total
+	}
+	if msg.states != nil {
+		m.states = cloneStates(msg.states)
+	}
+	if msg.toolID != "" {
+		m.states[msg.toolID] = msg.state
+		m.refreshChecked = msg.checked
+	}
+	if _, found := engine.FindMise(nil, ""); found {
+		m.miseInstalled = true
+	}
+	m.rebuildPlan()
+	m.ensureSelection()
+}
+
 func (m *Model) applyRefresh(msg refreshDoneMsg) {
+	m.refreshing = false
+	m.refreshPhase = ""
 	if msg.err != nil {
 		m.notice = "Refresh failed: " + msg.err.Error()
 		return
 	}
 	if msg.states != nil {
 		m.states = cloneStates(msg.states)
+	}
+	if _, found := engine.FindMise(nil, ""); found {
+		m.miseInstalled = true
 	}
 	m.rebuildPlan()
 	m.ensureSelection()

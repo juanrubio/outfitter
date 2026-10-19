@@ -212,6 +212,9 @@ func (m *Model) headerLines(barTitle string) []string {
 		barRight = nil
 	}
 	lines = append(lines, m.composeLine(barLeft, barRight, m.width, ""))
+	if m.refreshing {
+		lines = append(lines, m.refreshLine())
+	}
 	if m.editing || m.query != "" {
 		lines = append(lines, m.searchLine())
 	}
@@ -224,6 +227,37 @@ func (m *Model) headerLines(barTitle string) []string {
 	}
 	lines = append(lines, m.renderSpans([]span{{text: strings.Repeat("─", m.width), token: "border"}}, m.width, ""))
 	return lines
+}
+
+func (m *Model) refreshLine() string {
+	total := m.refreshTotal
+	if total <= 0 {
+		total = len(m.catalog.Tools)
+	}
+	checked := m.refreshChecked
+	if checked > total {
+		checked = total
+	}
+	barWidth := 20
+	filled := 0
+	if total > 0 {
+		filled = (checked * barWidth) / total
+	}
+	if filled > barWidth {
+		filled = barWidth
+	}
+	bar := "[" + strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled) + "]"
+	phase := m.refreshPhase
+	if phase == "" {
+		phase = "Discovering tool states…"
+	}
+	left := []span{
+		{text: "  " + m.spinnerFrame() + " ", token: "accent", bold: true},
+		{text: phase + " ", token: "text", bold: true},
+		{text: bar, token: "accent"},
+		{text: fmt.Sprintf(" %d/%d checked", checked, total), token: "muted"},
+	}
+	return m.renderSpans(left, m.width, "")
 }
 
 func (m *Model) searchLine() string {
@@ -345,7 +379,7 @@ func (m *Model) toolLine(tool domain.Tool, width int, selected bool) []span {
 		nameToken = "muted"
 	}
 
-	versionText, versionToken := toolVersion(state, action)
+	versionText, versionToken := m.toolVersion(state, action)
 	spans := []span{
 		{text: cursor, token: cursorToken, bold: true},
 		{text: " ", token: "text"},
@@ -365,8 +399,11 @@ func (m *Model) toolLine(tool domain.Tool, width int, selected bool) []span {
 	return spans
 }
 
-func toolVersion(state domain.ToolState, action domain.DesiredAction) (string, string) {
+func (m *Model) toolVersion(state domain.ToolState, action domain.DesiredAction) (string, string) {
 	if action == domain.ActionInstall {
+		if state.LatestVersion == "" && state.CheckStatus == domain.StatusChecking {
+			return "— → " + m.spinnerFrame() + " checking…", "accent"
+		}
 		return "— → " + state.LatestVersion, "accent"
 	}
 	if action == domain.ActionUpdate || state.IsOutdated() {
@@ -377,7 +414,13 @@ func toolVersion(state domain.ToolState, action domain.DesiredAction) (string, s
 		return shorten(state.InstalledVersion, 8) + " → " + shorten(state.LatestVersion, 8), token
 	}
 	if state.IsInstalled() {
+		if state.CheckStatus == domain.StatusChecking {
+			return shorten(state.InstalledVersion, 12) + " " + m.spinnerFrame(), "good"
+		}
 		return shorten(state.InstalledVersion, 15), "good"
+	}
+	if state.CheckStatus == domain.StatusChecking && state.LatestVersion == "" {
+		return m.spinnerFrame() + " checking…", "muted"
 	}
 	return fmt.Sprintf("— (%s)", shorten(state.LatestVersion, 8)), "muted"
 }
@@ -447,12 +490,20 @@ func (m *Model) inspectorBox(tool domain.Tool, width, height int) []string {
 	installedText := state.InstalledVersion
 	installedToken := "good"
 	if installedText == "" {
-		installedText = "— (not installed)"
-		installedToken = "muted"
+		if state.CheckStatus == domain.StatusChecking && m.refreshChecked == 0 {
+			installedText = m.spinnerFrame() + " scanning local system…"
+			installedToken = "accent"
+		} else {
+			installedText = "— (not installed)"
+			installedToken = "muted"
+		}
 	}
 	latestText := state.LatestVersion
 	latestToken := "text"
-	if state.IsOutdated() {
+	if latestText == "" && state.CheckStatus == domain.StatusChecking {
+		latestText = m.spinnerFrame() + " checking upstream…"
+		latestToken = "accent"
+	} else if state.IsOutdated() {
 		latestText += " (update available)"
 		latestToken = "low"
 	}
