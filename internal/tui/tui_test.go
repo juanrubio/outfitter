@@ -185,3 +185,428 @@ func assertScreen(t *testing.T, content string, width, height int) {
 func displaySize(width, height int) string {
 	return fmt.Sprintf("%dx%d", width, height)
 }
+
+func pressKey(m *Model, code rune, text string) tea.Cmd {
+	_, cmd := m.Update(tea.KeyPressMsg{Code: code, Text: text})
+	return cmd
+}
+
+func typeText(m *Model, text string) {
+	for _, runeValue := range text {
+		m.Update(tea.KeyPressMsg{Code: runeValue, Text: string(runeValue)})
+	}
+}
+
+func TestCategoryJumpsAndTabCollapse(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pressKey(m, '2', "2")
+	if m.selected != "boardwalk" {
+		t.Fatalf("2 selected %q, want boardwalk", m.selected)
+	}
+	if m.collapsed["ai-tuis"] {
+		t.Fatal("category 2 was not expanded")
+	}
+	m.collapsed["ai-tuis"] = true
+	pressKey(m, '2', "2")
+	if m.collapsed["ai-tuis"] {
+		t.Fatal("pressing 2 should expand a collapsed category")
+	}
+
+	pressKey(m, '3', "3")
+	if m.selected != "tmux" {
+		t.Fatalf("3 selected %q, want tmux", m.selected)
+	}
+	pressKey(m, '4', "4")
+	if m.selected != "browser-use" {
+		t.Fatalf("4 selected %q, want browser-use", m.selected)
+	}
+	pressKey(m, '1', "1")
+	if m.selected != "claude-code" {
+		t.Fatalf("1 selected %q, want claude-code", m.selected)
+	}
+
+	pressKey(m, tea.KeyTab, "")
+	if !m.collapsed["harnesses"] {
+		t.Fatal("Tab did not collapse the focused category")
+	}
+	if m.selected == "claude-code" {
+		t.Fatal("selection remained inside a collapsed category")
+	}
+}
+
+func TestAcceptanceNavigationAndPlanMutations(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pressKey(m, tea.KeyPgDown, "")
+	if m.selected != "quotary" {
+		t.Fatalf("pgdown selected %q, want quotary", m.selected)
+	}
+	pressKey(m, tea.KeyPgUp, "")
+	if m.selected != "claude-code" {
+		t.Fatalf("pgup selected %q, want claude-code", m.selected)
+	}
+
+	m.selected = "codex"
+	pressKey(m, ' ', " ")
+	if m.actions["codex"] != domain.ActionUpdate {
+		t.Fatalf("Space queued %q, want update", m.actions["codex"])
+	}
+	if !strings.Contains(m.notice, "Update queued") {
+		t.Fatalf("Space notice = %q", m.notice)
+	}
+
+	m.actions = make(map[string]domain.DesiredAction)
+	m.rebuildPlan()
+	pressKey(m, 'u', "u")
+	for _, id := range []string{"codex", "muse", "trailmark", "lazygit", "browser-use"} {
+		if m.actions[id] != domain.ActionUpdate {
+			t.Errorf("u did not queue update for %s: %q", id, m.actions[id])
+		}
+	}
+	if m.notice != "Queued 5 updates" {
+		t.Fatalf("u notice = %q", m.notice)
+	}
+	pressKey(m, 'u', "u")
+	if m.notice != "All outdated tools already queued" {
+		t.Fatalf("second u notice = %q", m.notice)
+	}
+
+	m.actions = make(map[string]domain.DesiredAction)
+	m.rebuildPlan()
+	m.selected = "muse"
+	pressKey(m, 'U', "U")
+	if m.actions["muse"] != domain.ActionUpdate {
+		t.Fatalf("U queued %q, want update", m.actions["muse"])
+	}
+	m.selected = "gemini-cli"
+	pressKey(m, 'U', "U")
+	if m.actions["gemini-cli"] != domain.ActionInstall {
+		t.Fatalf("U on uninstalled queued %q, want install", m.actions["gemini-cli"])
+	}
+
+	m.actions = make(map[string]domain.DesiredAction)
+	m.rebuildPlan()
+	m.selected = "codex"
+	pressKey(m, 'g', "g")
+	if m.actions["gemini-cli"] != domain.ActionInstall || m.actions["copilot-cli"] != domain.ActionInstall {
+		t.Fatal("g did not queue installs for uninstalled category tools")
+	}
+	if m.actions["codex"] != domain.ActionUpdate || m.actions["muse"] != domain.ActionUpdate {
+		t.Fatal("g did not queue updates for outdated category tools")
+	}
+	pressKey(m, 'g', "g")
+	if len(m.actions) != 0 {
+		t.Fatalf("second g left actions: %v", m.actions)
+	}
+
+	pressKey(m, 'x', "x")
+	if len(m.actions) != 0 || m.notice != "Cleared all pending plan actions" {
+		t.Fatalf("x did not reset plan: actions=%v notice=%q", m.actions, m.notice)
+	}
+}
+
+func TestFilterCycling(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.filter != filterAll || !strings.Contains(m.View().Content, "[ All (31) ]") {
+		t.Fatalf("initial filter = %q", m.filter)
+	}
+
+	pressKey(m, 'f', "f")
+	if m.filter != filterOutdated {
+		t.Fatalf("filter = %q, want outdated", m.filter)
+	}
+	if !strings.Contains(m.View().Content, "[ Outdated (5) ]") {
+		t.Fatal("outdated filter badge missing")
+	}
+	for _, id := range m.visibleToolIDs() {
+		if !m.states[id].IsOutdated() {
+			t.Errorf("outdated filter includes %s", id)
+		}
+	}
+
+	pressKey(m, 'f', "f")
+	if m.filter != filterPending {
+		t.Fatalf("filter = %q, want pending", m.filter)
+	}
+	ids := m.visibleToolIDs()
+	if len(ids) != 2 || ids[0] != "gemini-cli" || ids[1] != "quotary" {
+		t.Fatalf("pending visible = %v", ids)
+	}
+
+	pressKey(m, 'f', "f")
+	if m.filter != filterInstalled || !strings.Contains(m.View().Content, "[ Installed (26) ]") {
+		t.Fatalf("filter = %q", m.filter)
+	}
+	pressKey(m, 'f', "f")
+	if m.filter != filterUninstalled || !strings.Contains(m.View().Content, "[ Not installed (5) ]") {
+		t.Fatalf("filter = %q", m.filter)
+	}
+	pressKey(m, 'f', "f")
+	if m.filter != filterAll {
+		t.Fatalf("filter wrapped to %q", m.filter)
+	}
+}
+
+func TestIncrementalSearchCapturesShortcuts(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialActions := len(m.actions)
+
+	pressKey(m, '/', "/")
+	if !m.editing {
+		t.Fatal("/ did not enter search editing mode")
+	}
+	typeText(m, "codexuq")
+	if m.query != "codexuq" {
+		t.Fatalf("query = %q, want codexuq", m.query)
+	}
+	if m.view != "catalog" || len(m.actions) != initialActions {
+		t.Fatal("single-key shortcuts fired while editing search")
+	}
+	if !strings.Contains(m.View().Content, "/ ") || !strings.Contains(m.View().Content, "codexuq") || !strings.Contains(m.View().Content, "(Esc to clear)") {
+		t.Fatal("search bar is not visible while editing")
+	}
+
+	pressKey(m, tea.KeyBackspace, "")
+	if m.query != "codexu" {
+		t.Fatalf("backspace query = %q", m.query)
+	}
+	pressKey(m, tea.KeyEnter, "")
+	if m.editing || m.query != "codexu" {
+		t.Fatalf("Enter did not commit search: editing=%v query=%q", m.editing, m.query)
+	}
+	pressKey(m, tea.KeyEscape, "")
+	if m.query != "" {
+		t.Fatalf("Esc did not clear committed query: %q", m.query)
+	}
+
+	pressKey(m, '/', "/")
+	typeText(m, "codex")
+	pressKey(m, tea.KeyEscape, "")
+	if m.editing || m.query != "" {
+		t.Fatalf("Esc in editing did not clear: editing=%v query=%q", m.editing, m.query)
+	}
+}
+
+func TestProfileSelectorAppliesServerProfile(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pressKey(m, 'p', "p")
+	if m.view != "profiles" {
+		t.Fatalf("view = %q, want profiles", m.view)
+	}
+	screen := m.View().Content
+	for _, marker := range []string{"SELECT OUTFITTER PROFILE (p)", "Full Desktop", "Headless Server / VPS", "Coding Harnesses Only", "Minimal Core", "[active]"} {
+		if !strings.Contains(screen, marker) {
+			t.Errorf("profile modal missing %q", marker)
+		}
+	}
+
+	pressKey(m, 'j', "j")
+	if m.profileCursor != 1 {
+		t.Fatalf("profileCursor = %d, want 1", m.profileCursor)
+	}
+	pressKey(m, tea.KeyEnter, "")
+	if m.view != "catalog" || m.activeProfileID != "server" {
+		t.Fatalf("applied view=%q profile=%q", m.view, m.activeProfileID)
+	}
+	if m.actions["btop"] != domain.ActionInstall {
+		t.Fatalf("server profile did not queue btop install: %q", m.actions["btop"])
+	}
+	if _, ok := m.actions["gemini-cli"]; ok {
+		t.Fatal("server profile kept a non-member uninstalled install")
+	}
+	if !strings.Contains(m.notice, "Headless Server / VPS") {
+		t.Fatalf("profile notice = %q", m.notice)
+	}
+
+	pressKey(m, 'p', "p")
+	pressKey(m, '4', "4")
+	if m.activeProfileID != "minimal" {
+		t.Fatalf("digit 4 applied profile %q", m.activeProfileID)
+	}
+}
+
+func TestPlanReviewApplyingAndBootstrap(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.actions = map[string]domain.DesiredAction{
+		"btop": domain.ActionInstall,
+		"tmux": domain.ActionUpdate,
+	}
+	m.rebuildPlan()
+
+	pressKey(m, 'a', "a")
+	if m.view != "plan" {
+		t.Fatalf("view = %q, want plan", m.view)
+	}
+	screen := m.View().Content
+	for _, marker := range []string{
+		"DRY-RUN EXECUTION PLAN (Nothing has been modified on disk yet)",
+		"Summary: +1 install · ↑1 update · -0 remove",
+		"[sudo required for apt]",
+		"INSTALLATIONS (+1)",
+		"UPDATES (↑1)",
+		"[apt·sudo]",
+	} {
+		if !strings.Contains(screen, marker) {
+			t.Errorf("plan screen missing %q", marker)
+		}
+	}
+
+	pressKey(m, tea.KeyEnter, "")
+	if m.view != "applying" {
+		t.Fatalf("view = %q, want applying", m.view)
+	}
+	if len(m.execSteps) != 2 {
+		t.Fatalf("execSteps = %d, want 2", len(m.execSteps))
+	}
+	screen = m.View().Content
+	for _, marker := range []string{"LIVE EXECUTION PROGRESS", "Overall progress", "LIVE OUTPUT", "0 of 2 completed"} {
+		if !strings.Contains(screen, marker) {
+			t.Errorf("applying screen missing %q", marker)
+		}
+	}
+	m.AdvanceExecution()
+	done, _, _ := m.executionCounts()
+	if done != 1 {
+		t.Fatalf("AdvanceExecution done = %d, want 1", done)
+	}
+	if !strings.Contains(m.View().Content, "1 of 2 completed") {
+		t.Fatal("progress header did not advance")
+	}
+	pressKey(m, tea.KeyEscape, "")
+	if m.view != "catalog" {
+		t.Fatalf("Esc from applying view = %q", m.view)
+	}
+
+	m.miseInstalled = false
+	m.rebuildPlan()
+	pressKey(m, 'a', "a")
+	screen = m.View().Content
+	if !strings.Contains(screen, "0. BOOTSTRAP PREREQUISITE (mise)") {
+		t.Fatal("plan screen is missing the mise bootstrap prerequisite")
+	}
+}
+
+func TestPlanEmptyStateAndHelp(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 80, Height: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pressKey(m, 'x', "x")
+	pressKey(m, 'a', "a")
+	if !strings.Contains(m.View().Content, "No pending changes in your plan.") {
+		t.Fatal("empty plan state is missing")
+	}
+	pressKey(m, tea.KeyEscape, "")
+	pressKey(m, '?', "?")
+	if m.view != "help" {
+		t.Fatalf("view = %q, want help", m.view)
+	}
+	screen := m.View().Content
+	for _, marker := range []string{"OUTFITTER KEYBOARD SHORTCUTS (?)", "↑ / ↓ or j / k", "Space", "u", "U", "g", "p", "a", "x", "f", "/", "b", "r", "Esc / q"} {
+		if !strings.Contains(screen, marker) {
+			t.Errorf("help screen missing %q", marker)
+		}
+	}
+	pressKey(m, '?', "?")
+	if m.view != "catalog" {
+		t.Fatalf("? did not close help: %q", m.view)
+	}
+}
+
+func TestQuitConfirmation(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := pressKey(m, 'q', "q")
+	if cmd != nil || !m.confirmQuit {
+		t.Fatal("q with pending changes should prompt, not quit")
+	}
+	if !strings.Contains(m.notice, "Unapplied changes in plan") {
+		t.Fatalf("quit notice = %q", m.notice)
+	}
+	pressKey(m, tea.KeyEscape, "")
+	if m.confirmQuit {
+		t.Fatal("Esc did not cancel quit confirmation")
+	}
+
+	pressKey(m, 'x', "x")
+	cmd = pressKey(m, 'q', "q")
+	if cmd == nil {
+		t.Fatal("q with a clean plan should quit immediately")
+	}
+
+	m.actions["codex"] = domain.ActionUpdate
+	m.rebuildPlan()
+	pressKey(m, 'q', "q")
+	cmd = pressKey(m, 'y', "y")
+	if cmd == nil {
+		t.Fatal("y during quit confirmation should quit")
+	}
+}
+
+func TestAllViewsScreenGeometry(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	sizes := []struct {
+		width  int
+		height int
+	}{
+		{120, 40},
+		{80, 24},
+	}
+	views := []struct {
+		name  string
+		setup func(*Model)
+	}{
+		{"catalog", func(*Model) {}},
+		{"profiles", func(m *Model) { pressKey(m, 'p', "p") }},
+		{"plan", func(m *Model) { m.actions["btop"] = domain.ActionInstall; m.rebuildPlan(); pressKey(m, 'a', "a") }},
+		{"applying", func(m *Model) {
+			m.actions["btop"] = domain.ActionInstall
+			m.rebuildPlan()
+			m.startExecution()
+			m.view = "applying"
+		}},
+		{"help", func(m *Model) { pressKey(m, '?', "?") }},
+		{"detail", func(m *Model) { m.view = "detail" }},
+	}
+	for _, size := range sizes {
+		for _, view := range views {
+			t.Run(fmt.Sprintf("%s/%s", displaySize(size.width, size.height), view.name), func(t *testing.T) {
+				m, err := NewModel(Options{Demo: true, Width: size.width, Height: size.height})
+				if err != nil {
+					t.Fatal(err)
+				}
+				view.setup(m)
+				assertScreen(t, m.View().Content, size.width, size.height)
+			})
+		}
+	}
+}

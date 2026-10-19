@@ -10,7 +10,7 @@ after its exit gate passes and a review record is written under
 | 0 | Repository, Documentation Layout, and Tooling Foundation | Complete | `make check`, `make build` |
 | 1 | Domain Model, Embedded Catalog, and `catalog.toml` Merger | Complete | `make check`, `make race`, `make build` |
 | 2 | Theme System, Demo Backend, and TUI Layouts | Complete | `make check`, `make race`, `make build` |
-| 3 | TUI State Machine, Modals, and Golden Tests | Not started | — |
+| 3 | TUI State Machine, Modals, and Golden Tests | Complete | `make check`, `make race`, `make build` |
 | 4 | State Discovery, Version Inspector, and `mise` Bootstrapper | Not started | — |
 | 5 | Execution Adapters and Live Runner | Not started | — |
 | 6 | Non-Interactive CLI, VHS Tapes, and Release Hardening | Not started | — |
@@ -63,6 +63,27 @@ after its exit gate passes and a review record is written under
   resolution, fixture counts and versions, offline demo imports, screen
   dimensions, all marker glyphs across themes, compact detail navigation, and
   the absence of raw hex color literals under `internal/tui/`.
+- Verification: `make check`, `make race`, and `make build` exit 0.
+
+## Phase 3 Evidence
+
+- `internal/tui` implements the complete keyboard state machine: `j`/`k`,
+  arrow keys, `PgUp`/`PgDn`, `1`–`4` category jumps with expansion, `Tab`
+  collapse/expand, `Space` action cycling, `u`/`U` update queuing, `g`
+  category toggling, `x` plan reset, `f` five-mode filtering, `/` incremental
+  search that captures printable keys without firing global shortcuts, `b`
+  bootstrap simulation, `r` refresh notices, `c` catalog-source notice, and
+  plan-safe `q` quit confirmation (`Ctrl+C` always exits).
+- Overlay screens include the Profile Selector (`p`), Dry-Run Plan & Apply
+  (`a` or `Enter` on wide layouts) with bootstrap, sudo, command, and summary
+  sections, Live Execution Progress with deterministic demo advancement via
+  `StepProgressMsg`/`AdvanceExecution` for Phase 5 reuse, and the Keyboard Help
+  reference (`?`).
+- `internal/tui/tui_test.go` covers every keybinding and state transition,
+  all five filters, search key capture and clearing, server/minimal profile
+  application, plan/apply transitions, missing `mise` bootstrap, help, quit
+  safety, and exact screen geometry for `catalog`, `profiles`, `plan`,
+  `applying`, `help`, and `detail` at `120×40` and `80×24`.
 - Verification: `make check`, `make race`, and `make build` exit 0.
 
 ## Phase Status Legend

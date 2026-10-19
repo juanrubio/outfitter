@@ -156,7 +156,7 @@ func (m *Model) headerLines(barTitle string) []string {
 	}
 
 	profileName := "Full Desktop"
-	if profile, ok := m.catalog.ProfileByID("desktop"); ok {
+	if profile, ok := m.catalog.ProfileByID(m.activeProfileID); ok {
 		profileName = profile.Name
 	}
 
@@ -173,7 +173,7 @@ func (m *Model) headerLines(barTitle string) []string {
 		headerLeft = append(headerLeft, span{text: fmt.Sprintf("  Profile: %s · %s", profileName, miseStatus), token: token})
 	} else {
 		shortProfile := "Desktop"
-		if profile, ok := m.catalog.ProfileByID("desktop"); ok && profile.Short != "" {
+		if profile, ok := m.catalog.ProfileByID(m.activeProfileID); ok && profile.Short != "" {
 			shortProfile = profile.Short
 		}
 		shortMise := "mise ready"
@@ -197,7 +197,7 @@ func (m *Model) headerLines(barTitle string) []string {
 	} else {
 		barLeft = append(barLeft,
 			span{text: "Filter: ", token: "muted"},
-			span{text: fmt.Sprintf("[ All (%d) ]", total), token: "accent", bold: true},
+			span{text: m.filterLabel(), token: "accent", bold: true},
 			span{text: "  [p] Profile", token: "text"},
 			span{text: fmt.Sprintf("  [u] Queue %d updates", outdated), token: tokenForCount(outdated, "low")},
 			span{text: fmt.Sprintf("  [a] Apply plan (%d)", pending), token: tokenForCount(pending, "good")},
@@ -212,8 +212,28 @@ func (m *Model) headerLines(barTitle string) []string {
 		barRight = nil
 	}
 	lines = append(lines, m.composeLine(barLeft, barRight, m.width, ""))
+	if m.editing || m.query != "" {
+		lines = append(lines, m.searchLine())
+	}
+	if m.notice != "" {
+		token := "accent"
+		if m.confirmQuit {
+			token = "low"
+		}
+		lines = append(lines, m.renderSpans([]span{{text: truncateDisplay(m.notice, m.width), token: token, bold: true}}, m.width, ""))
+	}
 	lines = append(lines, m.renderSpans([]span{{text: strings.Repeat("─", m.width), token: "border"}}, m.width, ""))
 	return lines
+}
+
+func (m *Model) searchLine() string {
+	spans := []span{
+		{text: "/ ", token: "accent", bold: true},
+		{text: m.query, token: "text"},
+		{text: "▏", token: "accent", bold: true},
+		{text: "  (Esc to clear)", token: "muted"},
+	}
+	return m.renderSpans(spans, m.width, "")
 }
 
 func tokenForCount(count int, token string) string {
@@ -252,6 +272,15 @@ func (m *Model) catalogRows() []catalogRow {
 				outdated++
 			}
 		}
+		visibleTools := make([]domain.Tool, 0, len(tools))
+		for _, tool := range tools {
+			if m.toolMatches(tool) {
+				visibleTools = append(visibleTools, tool)
+			}
+		}
+		if len(visibleTools) == 0 {
+			continue
+		}
 		rows = append(rows, catalogRow{
 			category:  category,
 			installed: installed,
@@ -262,8 +291,8 @@ func (m *Model) catalogRows() []catalogRow {
 		if m.collapsed[category.ID] {
 			continue
 		}
-		for index := range tools {
-			tool := tools[index]
+		for index := range visibleTools {
+			tool := visibleTools[index]
 			rows = append(rows, catalogRow{tool: &tool})
 		}
 	}
@@ -386,7 +415,7 @@ func (m *Model) inspectorBox(tool domain.Tool, width, height int) []string {
 	marker, markerToken, markerLabel := domain.Marker(action, state.IsInstalled(), state.IsOutdated())
 
 	title := "INSPECTOR · " + tool.Binary
-	top := m.boxTop(title, width, "border", "accent")
+	top := m.boxTop(title, width, "accent")
 
 	innerWidth := width - 2
 	innerHeight := height - 2
@@ -482,9 +511,9 @@ func (m *Model) inspectorBox(tool domain.Tool, width, height int) []string {
 
 	lines := []string{top}
 	for _, spans := range content {
-		lines = append(lines, m.boxContentLine(spans, width, "surface"))
+		lines = append(lines, m.boxContentLine(spans, width))
 	}
-	lines = append(lines, m.boxBottom(width, "border"))
+	lines = append(lines, m.boxBottom(width))
 	return lines
 }
 
@@ -499,7 +528,7 @@ func (m *Model) planBox(width, height int) []string {
 
 	innerHeight := height - 2
 	if innerHeight < 1 {
-		return []string{m.boxTop(title, width, "border", titleToken)}
+		return []string{m.boxTop(title, width, titleToken)}
 	}
 
 	content := make([][]span, 0, innerHeight)
@@ -522,11 +551,11 @@ func (m *Model) planBox(width, height int) []string {
 		content = append(content, []span{{text: "Press [a] to review & apply · [x] reset plan", token: tokenForCount(pending, "good")}})
 	}
 
-	lines := []string{m.boxTop(title, width, "border", titleToken)}
+	lines := []string{m.boxTop(title, width, titleToken)}
 	for _, spans := range content {
-		lines = append(lines, m.boxContentLine(spans, width, "surface"))
+		lines = append(lines, m.boxContentLine(spans, width))
 	}
-	lines = append(lines, m.boxBottom(width, "border"))
+	lines = append(lines, m.boxBottom(width))
 	return lines
 }
 
@@ -576,7 +605,7 @@ func toolCommand(tool domain.Tool, state domain.ToolState, action domain.Desired
 	}
 }
 
-func (m *Model) boxTop(title string, width int, borderToken, titleToken string) string {
+func (m *Model) boxTop(title string, width int, titleToken string) string {
 	if width < 2 {
 		return strings.Repeat(" ", maxInt(width, 0))
 	}
@@ -589,25 +618,25 @@ func (m *Model) boxTop(title string, width int, borderToken, titleToken string) 
 	if fill < 0 {
 		fill = 0
 	}
-	return m.styles.ByToken(borderToken).Render("╭─ ") +
+	return m.styles.ByToken("border").Render("╭─ ") +
 		m.styles.ByToken(titleToken).Bold(true).Render(title) +
-		m.styles.ByToken(borderToken).Render(" "+strings.Repeat("─", fill)+"╮")
+		m.styles.ByToken("border").Render(" "+strings.Repeat("─", fill)+"╮")
 }
 
-func (m *Model) boxBottom(width int, borderToken string) string {
+func (m *Model) boxBottom(width int) string {
 	if width < 2 {
 		return strings.Repeat(" ", maxInt(width, 0))
 	}
-	return m.styles.ByToken(borderToken).Render("╰" + strings.Repeat("─", width-2) + "╯")
+	return m.styles.ByToken("border").Render("╰" + strings.Repeat("─", width-2) + "╯")
 }
 
-func (m *Model) boxContentLine(content []span, width int, background string) string {
+func (m *Model) boxContentLine(content []span, width int) string {
 	innerWidth := width - 2
 	if innerWidth < 0 {
 		innerWidth = 0
 	}
 	return m.styles.ByToken("border").Render("│") +
-		m.renderSpans(content, innerWidth, background) +
+		m.renderSpans(content, innerWidth, "surface") +
 		m.styles.ByToken("border").Render("│")
 }
 
