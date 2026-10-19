@@ -26,10 +26,10 @@ func TestLoadDefault(t *testing.T) {
 	}
 	wantIDs := []string{
 		"claude-code", "codex", "muse", "antigravity-cli", "opencode", "pi", "gemini-cli", "copilot-cli",
-		"boardwalk", "trailmark", "quotary", "codexbar", "openclaw", "mercadona-cli",
+		"boardwalk", "trailmark", "quotary", "codexbar", "mercadona-cli",
 		"tmux", "hive", "gh", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
 		"zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
-		"browser-use", "mcporter", "oracle", "summarize", "wacli", "hcloud", "visidata",
+		"browser-use", "openclaw", "mcporter", "oracle", "summarize", "wacli", "hcloud", "visidata",
 	}
 	for index, want := range wantIDs {
 		if cat.Tools[index].ID != want {
@@ -50,9 +50,9 @@ func TestLoadDefault(t *testing.T) {
 		count int
 	}{
 		{"harnesses", 1, "CODING HARNESSES", 8},
-		{"ai-tuis", 2, "AI TUIS & PERSONAL TOOLS", 6},
+		{"ai-tuis", 2, "AI TUIS & PERSONAL TOOLS", 5},
 		{"terminal", 3, "TERMINAL & SESSION MANAGEMENT", 18},
-		{"utilities", 4, "AGENT & CLI UTILITIES", 7},
+		{"utilities", 4, "AGENT & CLI UTILITIES", 8},
 	}
 	for index, want := range categories {
 		got := cat.Categories[index]

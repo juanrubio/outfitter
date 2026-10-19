@@ -107,7 +107,7 @@ func (m *Model) centerBlock(box []string, boxWidth, height int) []string {
 		line := box[boxIndex]
 		lineWidth := displayWidth(line)
 		if lineWidth > m.width-left {
-			line = truncateDisplay(line, m.width-left)
+			line = clipStyledLine(line, m.width-left)
 			lineWidth = displayWidth(line)
 		}
 		right := m.width - left - lineWidth

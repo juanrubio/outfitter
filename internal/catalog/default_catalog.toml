@@ -267,22 +267,6 @@ version_args = ["--version"]
 version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
 
 [[tools]]
-id = "openclaw"
-name = "OpenClaw"
-binary = "openclaw"
-category = "ai-tuis"
-backend = "mise:npm"
-package = "openclaw"
-sudo = false
-profiles = ["desktop", "server"]
-description = "Open-source personal AI assistant and tmux worker coordinator (Galactus & Sam)."
-install_cmd = "mise use --global npm:openclaw@latest"
-update_cmd = "mise upgrade npm:openclaw"
-remove_cmd = "mise unuse --global npm:openclaw"
-version_args = ["--version"]
-version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
-
-[[tools]]
 id = "mercadona-cli"
 name = "mercadona-cli"
 binary = "mercadona"
@@ -603,6 +587,22 @@ description = "AI browser automation CLI and TUI (provides browser-use, browser-
 install_cmd = "mise x uv -- uv tool install browser-use"
 update_cmd = "mise x uv -- uv tool upgrade browser-use"
 remove_cmd = "mise x uv -- uv tool uninstall browser-use"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "openclaw"
+name = "OpenClaw"
+binary = "openclaw"
+category = "utilities"
+backend = "mise:npm"
+package = "openclaw"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Open-source personal AI assistant and tmux worker coordinator (Galactus & Sam)."
+install_cmd = "mise use --global npm:openclaw@latest"
+update_cmd = "mise upgrade npm:openclaw"
+remove_cmd = "mise unuse --global npm:openclaw"
 version_args = ["--version"]
 version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
 

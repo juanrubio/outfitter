@@ -351,19 +351,16 @@ func (m *Model) toolLine(tool domain.Tool, width int, selected bool) []span {
 	action := m.actions[tool.ID]
 	marker, markerToken, _ := domain.Marker(action, state.IsInstalled(), state.IsOutdated())
 
-	nameWidth := clampInt(width-34, 14, 24)
-	versionWidth := 19
-	fixedWidth := 1 + 1 + 4 + 1 + versionWidth
 	backendWidth := 0
-	if width >= 54 {
-		remaining := width - fixedWidth - nameWidth
-		if remaining > 0 {
-			backendWidth = minInt(9, remaining)
-		}
+	if width >= 56 {
+		backendWidth = 11
 	}
-	gapWidth := width - fixedWidth - nameWidth - backendWidth
-	if gapWidth < 0 {
-		gapWidth = 0
+	versionWidth := clampInt(width-28-backendWidth, 14, 21)
+	nameWidth := clampInt(width-6-versionWidth-backendWidth-2, 12, 22)
+	fixedWidth := 1 + 1 + 4 + nameWidth + 1 + versionWidth + backendWidth
+	gapWidth := width - fixedWidth
+	if gapWidth < 1 {
+		gapWidth = 1
 	}
 
 	cursor := " "
@@ -379,7 +376,7 @@ func (m *Model) toolLine(tool domain.Tool, width int, selected bool) []span {
 		nameToken = "muted"
 	}
 
-	versionText, versionToken := m.toolVersion(state, action)
+	versionText, versionToken := m.toolVersion(state, action, versionWidth)
 	spans := []span{
 		{text: cursor, token: cursorToken, bold: true},
 		{text: " ", token: "text"},
@@ -399,30 +396,31 @@ func (m *Model) toolLine(tool domain.Tool, width int, selected bool) []span {
 	return spans
 }
 
-func (m *Model) toolVersion(state domain.ToolState, action domain.DesiredAction) (string, string) {
+func (m *Model) toolVersion(state domain.ToolState, action domain.DesiredAction, maxWidth int) (string, string) {
+	partWidth := maxInt((maxWidth-3)/2, 5)
 	if action == domain.ActionInstall {
 		if state.LatestVersion == "" && state.CheckStatus == domain.StatusChecking {
 			return "— → " + m.spinnerFrame() + " checking…", "accent"
 		}
-		return "— → " + state.LatestVersion, "accent"
+		return "— → " + shorten(state.LatestVersion, maxWidth-4), "accent"
 	}
 	if action == domain.ActionUpdate || state.IsOutdated() {
 		token := "low"
 		if action == domain.ActionUpdate {
 			token = "accent"
 		}
-		return shorten(state.InstalledVersion, 8) + " → " + shorten(state.LatestVersion, 8), token
+		return shorten(state.InstalledVersion, partWidth) + " → " + shorten(state.LatestVersion, partWidth), token
 	}
 	if state.IsInstalled() {
 		if state.CheckStatus == domain.StatusChecking {
-			return shorten(state.InstalledVersion, 12) + " " + m.spinnerFrame(), "good"
+			return shorten(state.InstalledVersion, maxWidth-2) + " " + m.spinnerFrame(), "good"
 		}
-		return shorten(state.InstalledVersion, 15), "good"
+		return shorten(state.InstalledVersion, maxWidth), "good"
 	}
 	if state.CheckStatus == domain.StatusChecking && state.LatestVersion == "" {
 		return m.spinnerFrame() + " checking…", "muted"
 	}
-	return fmt.Sprintf("— (%s)", shorten(state.LatestVersion, 8)), "muted"
+	return fmt.Sprintf("— (%s)", shorten(state.LatestVersion, maxInt(maxWidth-4, 4))), "muted"
 }
 
 func (m *Model) inspectorBlock(tool domain.Tool, width, height int) []string {
@@ -832,10 +830,20 @@ func joinScreen(lines []string, width, height int) string {
 	return strings.Join(result, "\n")
 }
 
+func clipStyledLine(line string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	return lipgloss.NewStyle().MaxWidth(width).Render(line)
+}
+
 func truncateDisplay(text string, width int) string {
 	if width <= 0 {
 		return ""
 	}
+	text = strings.ReplaceAll(text, "\r", " ")
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.ReplaceAll(text, "\t", " ")
 	var builder strings.Builder
 	used := 0
 	for _, runeValue := range text {

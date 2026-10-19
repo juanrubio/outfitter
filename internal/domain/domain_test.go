@@ -133,6 +133,23 @@ func TestToolState(t *testing.T) {
 	if unknownLatest.IsOutdated() {
 		t.Fatal("tool with unknown latest version should not be outdated")
 	}
+
+	newerInstalled := domain.ToolState{InstalledVersion: "2.0.23", LatestVersion: "1.19.3"}
+	if newerInstalled.IsOutdated() {
+		t.Fatal("newer installed version (e.g. OpenCode v2 vs v1 release tag) should not be marked outdated")
+	}
+
+	nonNumericLatest := domain.ToolState{InstalledVersion: "1.8.1", LatestVersion: "jq"}
+	if nonNumericLatest.IsOutdated() {
+		t.Fatal("non-numeric latest version should not be marked outdated")
+	}
+
+	if got := domain.CompareVersions("2.0.23", "1.19.3"); got <= 0 {
+		t.Fatalf("CompareVersions(2.0.23, 1.19.3) = %d, want > 0", got)
+	}
+	if got := domain.CompareVersions("1.4.12-R6501.0", "1.4.10-R6427.1"); got <= 0 {
+		t.Fatalf("CompareVersions(1.4.12-R6501.0, 1.4.10-R6427.1) = %d, want > 0", got)
+	}
 }
 
 func TestDefaultCommands(t *testing.T) {

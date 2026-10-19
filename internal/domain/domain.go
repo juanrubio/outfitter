@@ -3,6 +3,8 @@
 // adapters.
 package domain
 
+import "strings"
+
 // BackendType identifies how Outfitter installs and updates a tool.
 type BackendType string
 
@@ -140,9 +142,85 @@ func (s ToolState) IsInstalled() bool {
 	return s.InstalledVersion != ""
 }
 
-// IsOutdated reports whether both versions are known and differ.
+// IsOutdated reports whether both versions are known and LatestVersion is
+// strictly newer than InstalledVersion.
 func (s ToolState) IsOutdated() bool {
-	return s.InstalledVersion != "" && s.LatestVersion != "" && s.InstalledVersion != s.LatestVersion
+	if s.InstalledVersion == "" || s.LatestVersion == "" {
+		return false
+	}
+	return CompareVersions(s.LatestVersion, s.InstalledVersion) > 0
+}
+
+// CompareVersions compares two version strings. It returns >0 when left is
+// newer than right, <0 when left is older than right, and 0 when equal.
+// Non-numeric versions fall back to string inequality only when both have no
+// numeric components.
+func CompareVersions(left, right string) int {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if left == right {
+		return 0
+	}
+	lNums, lRest := splitVersionParts(left)
+	rNums, rRest := splitVersionParts(right)
+	if len(lNums) == 0 || len(rNums) == 0 {
+		return 0
+	}
+	maxLen := len(lNums)
+	if len(rNums) > maxLen {
+		maxLen = len(rNums)
+	}
+	for i := 0; i < maxLen; i++ {
+		var lv, rv int
+		if i < len(lNums) {
+			lv = lNums[i]
+		}
+		if i < len(rNums) {
+			rv = rNums[i]
+		}
+		if lv != rv {
+			if lv > rv {
+				return 1
+			}
+			return -1
+		}
+	}
+	if lRest == rRest {
+		return 0
+	}
+	if lRest > rRest {
+		return 1
+	}
+	return -1
+}
+
+func splitVersionParts(v string) ([]int, string) {
+	v = strings.TrimPrefix(strings.TrimPrefix(v, "v"), "V")
+	var nums []int
+	rest := ""
+	parts := strings.Split(v, ".")
+	for idx, part := range parts {
+		num := 0
+		digits := 0
+		for digits < len(part) && part[digits] >= '0' && part[digits] <= '9' {
+			num = num*10 + int(part[digits]-'0')
+			digits++
+		}
+		if digits == 0 {
+			rest = strings.Join(parts[idx:], ".")
+			break
+		}
+		nums = append(nums, num)
+		if digits < len(part) {
+			suffix := part[digits:]
+			if idx+1 < len(parts) {
+				suffix += "." + strings.Join(parts[idx+1:], ".")
+			}
+			rest = suffix
+			break
+		}
+	}
+	return nums, rest
 }
 
 // DesiredAction is a queued mutation in the pending action plan.

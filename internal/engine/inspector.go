@@ -553,7 +553,13 @@ func (i *Inspector) applyUpstream(
 	latest, err := i.latestVersion(ctx, tool, misePath, miseFound, token)
 	switch {
 	case err == nil && latest != "":
-		state.LatestVersion = NormalizeVersion(latest)
+		normalized := NormalizeVersion(latest)
+		if (tool.Backend == domain.BackendVendor || tool.Backend == domain.BackendSource) &&
+			state.InstalledVersion != "" &&
+			domain.CompareVersions(normalized, state.InstalledVersion) < 0 {
+			normalized = state.InstalledVersion
+		}
+		state.LatestVersion = normalized
 		state.CheckStatus = domain.StatusReady
 		state.LastError = ""
 	case err == nil || tool.Backend == domain.BackendVendor || tool.Backend == domain.BackendSource:
@@ -814,16 +820,21 @@ func (i *Inspector) getJSON(ctx context.Context, rawURL string, headers map[stri
 
 var (
 	defaultVersionRe  = regexp.MustCompile(`v?(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?)`)
+	namedTagPrefixRe  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]*?-v?(\d+\.\d+.*)$`)
 	debianRevisionRe  = regexp.MustCompile(`^(.+)-([0-9][0-9A-Za-z.+~]*)$`)
 	digitPrefixSuffix = regexp.MustCompile(`^[0-9]+$`)
 )
 
-// NormalizeVersion removes a leading v, Debian epochs, and Debian revision
-// suffixes so installed and upstream versions compare consistently.
+// NormalizeVersion removes a leading v, package-name tag prefixes (such as
+// "jq-1.8.2"), Debian epochs, and Debian revision suffixes so installed and
+// upstream versions compare consistently.
 func NormalizeVersion(version string) string {
 	normalized := strings.TrimSpace(version)
 	normalized = strings.Trim(normalized, `"'`)
 	normalized = strings.TrimSpace(normalized)
+	if match := namedTagPrefixRe.FindStringSubmatch(normalized); match != nil {
+		normalized = match[1]
+	}
 	if len(normalized) > 1 && (normalized[0] == 'v' || normalized[0] == 'V') &&
 		normalized[1] >= '0' && normalized[1] <= '9' {
 		normalized = normalized[1:]

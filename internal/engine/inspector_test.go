@@ -216,6 +216,9 @@ func TestNormalizeVersion(t *testing.T) {
 		" 2026.9.6\n":    "2026.9.6",
 		"1.2.3-beta.1":   "1.2.3-beta.1",
 		"0.1.0-dev":      "0.1.0-dev",
+		"jq-1.8.2":       "1.8.2",
+		"tmux-3.5a":      "3.5a",
+		"release-v2.4.0": "2.4.0",
 	}
 	for input, want := range tests {
 		if got := NormalizeVersion(input); got != want {
