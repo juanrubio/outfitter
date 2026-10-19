@@ -54,16 +54,19 @@ func TestNextAction(t *testing.T) {
 		outdated  bool
 		want      domain.DesiredAction
 	}{
+		{"not installed empty", "", false, false, domain.ActionInstall},
 		{"not installed none", domain.ActionNone, false, false, domain.ActionInstall},
 		{"not installed install", domain.ActionInstall, false, false, domain.ActionNone},
 		{"not installed remove", domain.ActionRemove, false, false, domain.ActionInstall},
 		{"not installed update", domain.ActionUpdate, false, false, domain.ActionNone},
 
+		{"outdated empty", "", true, true, domain.ActionUpdate},
 		{"outdated none", domain.ActionNone, true, true, domain.ActionUpdate},
 		{"outdated update", domain.ActionUpdate, true, true, domain.ActionRemove},
 		{"outdated remove", domain.ActionRemove, true, true, domain.ActionNone},
 		{"outdated install", domain.ActionInstall, true, true, domain.ActionUpdate},
 
+		{"current empty", "", true, false, domain.ActionRemove},
 		{"current none", domain.ActionNone, true, false, domain.ActionRemove},
 		{"current install", domain.ActionInstall, true, false, domain.ActionRemove},
 		{"current update", domain.ActionUpdate, true, false, domain.ActionRemove},

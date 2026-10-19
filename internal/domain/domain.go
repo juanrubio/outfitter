@@ -237,6 +237,9 @@ const (
 // NextAction implements the Space-key checkbox state machine from the TUI
 // specification.
 func NextAction(current DesiredAction, installed, outdated bool) DesiredAction {
+	if current == "" {
+		current = ActionNone
+	}
 	if !installed {
 		if current == ActionNone || current == ActionRemove {
 			return ActionInstall
