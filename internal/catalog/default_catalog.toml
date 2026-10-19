@@ -1,0 +1,573 @@
+# Outfitter's embedded, opinionated default catalog.
+# User overrides belong in ~/.config/outfitter/catalog.toml.
+
+[settings]
+install_dir = "~/.local/bin"
+auto_bootstrap_mise = true
+github_token_from_gh = true
+
+[[categories]]
+id = "harnesses"
+num = 1
+title = "CODING HARNESSES"
+
+[[categories]]
+id = "ai-tuis"
+num = 2
+title = "AI TUIS & PERSONAL TOOLS"
+
+[[categories]]
+id = "terminal"
+num = 3
+title = "TERMINAL & SESSION MANAGEMENT"
+
+[[categories]]
+id = "utilities"
+num = 4
+title = "AGENT & CLI UTILITIES"
+
+[[profiles]]
+id = "desktop"
+name = "Full Desktop"
+short = "Desktop"
+description = "Complete workstation rig: all coding harnesses, AI TUIs, terminal tools, and browser/MCP utilities."
+tools = [
+  "claude-code", "codex", "muse", "antigravity-cli", "opencode", "pi", "gemini-cli", "copilot-cli",
+  "boardwalk", "trailmark", "quotary", "codexbar", "openclaw", "mercadona-cli",
+  "tmux", "hive", "gh", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
+  "browser-use", "mcporter", "oracle", "summarize", "wacli", "hcloud",
+]
+
+[[profiles]]
+id = "server"
+name = "Headless Server / VPS"
+short = "Server"
+description = "Tuned for Ubuntu home servers & Hetzner VPS agent workers (no desktop GUI or browser dependencies)."
+tools = [
+  "claude-code", "codex", "muse", "antigravity-cli", "opencode",
+  "boardwalk", "trailmark", "openclaw", "mercadona-cli",
+  "tmux", "hive", "gh", "lazygit", "fzf", "delta", "ripgrep", "fd", "jq", "btop",
+  "wacli", "hcloud",
+]
+
+[[profiles]]
+id = "harnesses"
+name = "Coding Harnesses Only"
+short = "Harnesses"
+description = "All 8 AI coding harnesses managed cleanly via vendor updaters and mise Node shims."
+tools = [
+  "claude-code", "codex", "muse", "antigravity-cli", "opencode", "pi", "gemini-cli", "copilot-cli",
+]
+
+[[profiles]]
+id = "minimal"
+name = "Minimal Core"
+short = "Minimal"
+description = "Essential daily drivers: Claude Code, Codex, Boardwalk, Trailmark, tmux, gh, fzf, rg, jq."
+tools = [
+  "claude-code", "codex", "boardwalk", "trailmark", "tmux", "gh", "fzf", "ripgrep", "jq",
+]
+
+# Category 1: Coding Harnesses
+
+[[tools]]
+id = "claude-code"
+name = "Claude Code"
+binary = "claude"
+category = "harnesses"
+backend = "vendor"
+package = "anthropic/claude-code"
+sudo = false
+profiles = ["desktop", "server", "harnesses", "minimal"]
+description = "Anthropic agentic coding CLI with MCP servers, hooks, skills, and memory."
+install_cmd = "curl -fsSL https://claude.ai/install.sh | sh"
+update_cmd = "claude update"
+remove_cmd = "rm -rf ~/.local/bin/claude ~/.local/share/claude"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "codex"
+name = "OpenAI Codex CLI"
+binary = "codex"
+category = "harnesses"
+backend = "mise:npm"
+package = "@openai/codex"
+sudo = false
+profiles = ["desktop", "server", "harnesses", "minimal"]
+description = "OpenAI local coding agent CLI with session logs and reasoning controls."
+install_cmd = "mise use --global npm:@openai/codex@latest"
+update_cmd = "mise upgrade npm:@openai/codex"
+remove_cmd = "mise unuse --global npm:@openai/codex"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "muse"
+name = "Muse Code"
+binary = "muse"
+category = "harnesses"
+backend = "vendor"
+package = "api.meta.ai/muse-code (muse-stable)"
+sudo = false
+profiles = ["desktop", "server", "harnesses"]
+description = "Meta agentic coding CLI driving Wonder and Wonder Full models."
+install_cmd = "curl -fsSL https://api.meta.ai/muse-launcher.sh -o ~/.local/bin/muse && chmod +x ~/.local/bin/muse"
+update_cmd = "MUSE_UPDATE_INTERVAL_SECONDS=0 muse --version"
+remove_cmd = "rm -f ~/.local/bin/muse ~/.local/bin/muse-bin-* ~/.local/bin/.muse-*"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?)'
+
+[[tools]]
+id = "antigravity-cli"
+name = "Antigravity CLI"
+binary = "agy"
+category = "harnesses"
+backend = "vendor"
+package = "google-deepmind/antigravity-cli"
+sudo = false
+profiles = ["desktop", "server", "harnesses"]
+description = "Google DeepMind agentic coding assistant CLI (agy) with subagents and skills."
+install_cmd = "agy self-update --install ~/.local/bin/agy"
+update_cmd = "agy update"
+remove_cmd = "rm -f ~/.local/bin/agy"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "opencode"
+name = "OpenCode v2"
+binary = "opencode"
+category = "harnesses"
+backend = "vendor"
+package = "sst/opencode"
+sudo = false
+profiles = ["desktop", "server", "harnesses"]
+description = "Terminal-native AI coding agent (v2) with multi-provider support."
+install_cmd = "curl -fsSL https://opencode.ai/install | bash"
+update_cmd = "opencode upgrade"
+remove_cmd = "rm -rf ~/.opencode ~/.local/bin/opencode"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "pi"
+name = "Pi Coding Agent"
+binary = "pi"
+category = "harnesses"
+backend = "mise:npm"
+package = "@earendil-works/pi-coding-agent"
+sudo = false
+profiles = ["desktop", "harnesses"]
+description = "Minimalist, hackable terminal coding harness by Earendil Works."
+install_cmd = "mise use --global npm:@earendil-works/pi-coding-agent@latest"
+update_cmd = "mise upgrade npm:@earendil-works/pi-coding-agent"
+remove_cmd = "mise unuse --global npm:@earendil-works/pi-coding-agent"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "gemini-cli"
+name = "Gemini CLI"
+binary = "gemini"
+category = "harnesses"
+backend = "mise:npm"
+package = "@google/gemini-cli"
+sudo = false
+profiles = ["desktop", "harnesses"]
+description = "Google open-source Gemini terminal coding agent."
+install_cmd = "mise use --global npm:@google/gemini-cli@latest"
+update_cmd = "mise upgrade npm:@google/gemini-cli"
+remove_cmd = "mise unuse --global npm:@google/gemini-cli"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "copilot-cli"
+name = "GitHub Copilot CLI"
+binary = "copilot"
+category = "harnesses"
+backend = "mise:npm"
+package = "@github/copilot"
+sudo = false
+profiles = ["desktop", "harnesses"]
+description = "GitHub Copilot agentic command-line assistant."
+install_cmd = "mise use --global npm:@github/copilot@latest"
+update_cmd = "mise upgrade npm:@github/copilot"
+remove_cmd = "mise unuse --global npm:@github/copilot"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+# Category 2: AI TUIs & Personal Tools
+
+[[tools]]
+id = "boardwalk"
+name = "Boardwalk"
+binary = "boardwalk"
+category = "ai-tuis"
+backend = "mise:ubi"
+package = "juanrubio/boardwalk"
+sudo = false
+profiles = ["desktop", "server", "minimal"]
+description = "Your GitHub Projects v2 boards in the terminal, powered by gh auth."
+install_cmd = "mise use --global ubi:juanrubio/boardwalk[exe=boardwalk]@latest"
+update_cmd = "mise upgrade ubi:juanrubio/boardwalk"
+remove_cmd = "mise unuse --global ubi:juanrubio/boardwalk"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "trailmark"
+name = "Trailmark"
+binary = "trailmark"
+category = "ai-tuis"
+backend = "mise:ubi"
+package = "juanrubio/trailmark"
+sudo = false
+profiles = ["desktop", "server", "minimal"]
+description = "Local keyboard-first TUI for browsing coding-agent sessions and saved memories."
+install_cmd = "mise use --global ubi:juanrubio/trailmark[exe=trailmark]@latest"
+update_cmd = "mise upgrade ubi:juanrubio/trailmark"
+remove_cmd = "mise unuse --global ubi:juanrubio/trailmark"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "quotary"
+name = "Quotary"
+binary = "quotary"
+category = "ai-tuis"
+backend = "mise:ubi"
+package = "juanrubio/quotary"
+sudo = false
+profiles = ["desktop"]
+description = "Go terminal dashboard for AI subscription capacity, reset times, and token history."
+install_cmd = "mise use --global ubi:juanrubio/quotary[exe=quotary]@latest"
+update_cmd = "mise upgrade ubi:juanrubio/quotary"
+remove_cmd = "mise unuse --global ubi:juanrubio/quotary"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "codexbar"
+name = "CodexBar CLI"
+binary = "codexbar"
+category = "ai-tuis"
+backend = "vendor"
+package = "steipete/CodexBar"
+sudo = false
+profiles = ["desktop"]
+description = "Provider allowance and usage reader CLI used as the backend for Quotary."
+install_cmd = "outfitter internal-install codexbar --version 0.77.0 --bundle-dir ~/.local/share/outfitter/codexbar"
+update_cmd = "outfitter internal-install codexbar --version latest --bundle-dir ~/.local/share/outfitter/codexbar"
+remove_cmd = "rm -rf ~/.local/share/outfitter/codexbar ~/.local/bin/codexbar"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "openclaw"
+name = "OpenClaw"
+binary = "openclaw"
+category = "ai-tuis"
+backend = "mise:npm"
+package = "openclaw"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Open-source personal AI assistant and tmux worker coordinator (Galactus & Sam)."
+install_cmd = "mise use --global npm:openclaw@latest"
+update_cmd = "mise upgrade npm:openclaw"
+remove_cmd = "mise unuse --global npm:openclaw"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "mercadona-cli"
+name = "mercadona-cli"
+binary = "mercadona"
+category = "ai-tuis"
+backend = "mise:npm"
+package = "juanrubio/mercadona-cli"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Agent-friendly CLI (--json) for Mercadona carts, orders, and checkout flows."
+install_cmd = "mise use --global npm:mercadona-cli@latest"
+update_cmd = "mise upgrade npm:mercadona-cli"
+remove_cmd = "mise unuse --global npm:mercadona-cli"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+# Category 3: Terminal & Session Management
+
+[[tools]]
+id = "tmux"
+name = "tmux"
+binary = "tmux"
+category = "terminal"
+backend = "apt"
+package = "tmux"
+sudo = true
+profiles = ["desktop", "server", "minimal"]
+description = "Terminal multiplexer for persistent local and remote coding-agent sessions."
+install_cmd = "sudo apt-get install -y tmux"
+update_cmd = "sudo apt-get install --only-upgrade -y tmux"
+remove_cmd = "sudo apt-get remove -y tmux"
+version_args = ["-V"]
+version_regex = 'tmux ([0-9][0-9A-Za-z.~+-]*)'
+
+[[tools]]
+id = "hive"
+name = "Hive"
+binary = "hive"
+category = "terminal"
+backend = "mise:ubi"
+package = "mdipanjan/hive"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Lightweight Bubble Tea TUI for managing and switching tmux sessions."
+install_cmd = "mise use --global ubi:mdipanjan/hive@latest"
+update_cmd = "mise upgrade ubi:mdipanjan/hive"
+remove_cmd = "mise unuse --global ubi:mdipanjan/hive"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "gh"
+name = "GitHub CLI"
+binary = "gh"
+category = "terminal"
+backend = "apt"
+package = "gh"
+sudo = true
+profiles = ["desktop", "server", "minimal"]
+description = "GitHub official CLI; provides zero-storage OAuth tokens for Boardwalk and Outfitter."
+install_cmd = "sudo apt-get install -y gh"
+update_cmd = "sudo apt-get install --only-upgrade -y gh"
+remove_cmd = "sudo apt-get remove -y gh"
+version_args = ["--version"]
+version_regex = 'gh version ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "lazygit"
+name = "Lazygit"
+binary = "lazygit"
+category = "terminal"
+backend = "mise:aqua"
+package = "jesseduffield/lazygit"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Simple terminal UI for git commands, interactive staging, and worktree inspection."
+install_cmd = "mise use --global aqua:jesseduffield/lazygit@latest"
+update_cmd = "mise upgrade aqua:jesseduffield/lazygit"
+remove_cmd = "mise unuse --global aqua:jesseduffield/lazygit"
+version_args = ["--version"]
+version_regex = 'version=([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "fzf"
+name = "fzf"
+binary = "fzf"
+category = "terminal"
+backend = "mise:aqua"
+package = "junegunn/fzf"
+sudo = false
+profiles = ["desktop", "server", "minimal"]
+description = "Command-line fuzzy finder powering shell history and tmax session popups."
+install_cmd = "mise use --global aqua:junegunn/fzf@latest"
+update_cmd = "mise upgrade aqua:junegunn/fzf"
+remove_cmd = "mise unuse --global aqua:junegunn/fzf"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "delta"
+name = "git-delta"
+binary = "delta"
+category = "terminal"
+backend = "mise:aqua"
+package = "dandavison/delta"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Syntax-highlighting pager for git, diff, and grep output."
+install_cmd = "mise use --global aqua:dandavison/delta@latest"
+update_cmd = "mise upgrade aqua:dandavison/delta"
+remove_cmd = "mise unuse --global aqua:dandavison/delta"
+version_args = ["--version"]
+version_regex = 'delta ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "glow"
+name = "Glow"
+binary = "glow"
+category = "terminal"
+backend = "mise:aqua"
+package = "charmbracelet/glow"
+sudo = false
+profiles = ["desktop"]
+description = "Render Markdown specs, PRDs, and agent memory files on the CLI."
+install_cmd = "mise use --global aqua:charmbracelet/glow@latest"
+update_cmd = "mise upgrade aqua:charmbracelet/glow"
+remove_cmd = "mise unuse --global aqua:charmbracelet/glow"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "ripgrep"
+name = "ripgrep"
+binary = "rg"
+category = "terminal"
+backend = "mise:aqua"
+package = "BurntSushi/ripgrep"
+sudo = false
+profiles = ["desktop", "server", "minimal"]
+description = "Recursively searches directories for a regex pattern at high speed."
+install_cmd = "mise use --global aqua:BurntSushi/ripgrep@latest"
+update_cmd = "mise upgrade aqua:BurntSushi/ripgrep"
+remove_cmd = "mise unuse --global aqua:BurntSushi/ripgrep"
+version_args = ["--version"]
+version_regex = 'ripgrep ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "fd"
+name = "fd"
+binary = "fd"
+category = "terminal"
+backend = "mise:aqua"
+package = "sharkdp/fd"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Fast, user-friendly alternative to find used by coding harnesses."
+install_cmd = "mise use --global aqua:sharkdp/fd@latest"
+update_cmd = "mise upgrade aqua:sharkdp/fd"
+remove_cmd = "mise unuse --global aqua:sharkdp/fd"
+version_args = ["--version"]
+version_regex = 'fd ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "jq"
+name = "jq"
+binary = "jq"
+category = "terminal"
+backend = "mise:aqua"
+package = "jqlang/jq"
+sudo = false
+profiles = ["desktop", "server", "minimal"]
+description = "Lightweight and flexible command-line JSON processor."
+install_cmd = "mise use --global aqua:jqlang/jq@latest"
+update_cmd = "mise upgrade aqua:jqlang/jq"
+remove_cmd = "mise unuse --global aqua:jqlang/jq"
+version_args = ["--version"]
+version_regex = 'jq-([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "btop"
+name = "btop"
+binary = "btop"
+category = "terminal"
+backend = "apt"
+package = "btop"
+sudo = true
+profiles = ["desktop", "server"]
+description = "Resource monitor showing usage and stats for processor, memory, disks, and processes."
+install_cmd = "sudo apt-get install -y btop"
+update_cmd = "sudo apt-get install --only-upgrade -y btop"
+remove_cmd = "sudo apt-get remove -y btop"
+version_args = ["--version"]
+version_regex = 'btop version ([0-9]+\.[0-9]+\.[0-9]+)'
+
+# Category 4: Agent & CLI Utilities
+
+[[tools]]
+id = "browser-use"
+name = "browser-use"
+binary = "browser-use"
+category = "utilities"
+backend = "uv"
+package = "browser-use"
+sudo = false
+profiles = ["desktop"]
+description = "AI browser automation CLI and TUI (provides browser-use, browser-use-tui, bu)."
+install_cmd = "mise x uv -- uv tool install browser-use"
+update_cmd = "mise x uv -- uv tool upgrade browser-use"
+remove_cmd = "mise x uv -- uv tool uninstall browser-use"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "mcporter"
+name = "MCPorter"
+binary = "mcporter"
+category = "utilities"
+backend = "mise:npm"
+package = "mcporter"
+sudo = false
+profiles = ["desktop"]
+description = "CLI utility for inspecting, testing, and managing MCP server configurations."
+install_cmd = "mise use --global npm:mcporter@latest"
+update_cmd = "mise upgrade npm:mcporter"
+remove_cmd = "mise unuse --global npm:mcporter"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "oracle"
+name = "Oracle"
+binary = "oracle"
+category = "utilities"
+backend = "mise:npm"
+package = "@steipete/oracle"
+sudo = false
+profiles = ["desktop"]
+description = "Second-opinion architectural review CLI for coding agents."
+install_cmd = "mise use --global npm:@steipete/oracle@latest"
+update_cmd = "mise upgrade npm:@steipete/oracle"
+remove_cmd = "mise unuse --global npm:@steipete/oracle"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "summarize"
+name = "Summarize"
+binary = "summarize"
+category = "utilities"
+backend = "mise:npm"
+package = "@steipete/summarize"
+sudo = false
+profiles = ["desktop"]
+description = "Fast URL, article, and transcript summarizer CLI for agent pipelines."
+install_cmd = "mise use --global npm:@steipete/summarize@latest"
+update_cmd = "mise upgrade npm:@steipete/summarize"
+remove_cmd = "mise unuse --global npm:@steipete/summarize"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "wacli"
+name = "wacli"
+binary = "wacli"
+category = "utilities"
+backend = "mise:ubi"
+package = "steipete/wacli"
+sudo = false
+profiles = ["desktop", "server"]
+description = "WhatsApp CLI bridge used by OpenClaw personal agents."
+install_cmd = "mise use --global ubi:steipete/wacli@latest"
+update_cmd = "mise upgrade ubi:steipete/wacli"
+remove_cmd = "mise unuse --global ubi:steipete/wacli"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "hcloud"
+name = "Hetzner Cloud CLI"
+binary = "hcloud"
+category = "utilities"
+backend = "mise:aqua"
+package = "hetznercloud/cli"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Official Hetzner Cloud CLI for managing remote VPS agent instances."
+install_cmd = "mise use --global aqua:hetznercloud/cli@latest"
+update_cmd = "mise upgrade aqua:hetznercloud/cli"
+remove_cmd = "mise unuse --global aqua:hetznercloud/cli"
+version_args = ["version"]
+version_regex = 'hcloud ([0-9]+\.[0-9]+\.[0-9]+)'
