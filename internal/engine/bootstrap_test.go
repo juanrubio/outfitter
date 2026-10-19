@@ -74,6 +74,44 @@ func TestBootstrapMiseSuccess(t *testing.T) {
 	}
 }
 
+func TestBootstrapMiseVersionedArchiveName(t *testing.T) {
+	t.Parallel()
+	archive := makeTarGz(t, []tarFile{
+		{Name: ".", Content: ""},
+		{Name: "mise/bin/mise", Content: "#!/bin/sh\necho mise 2026.10.15\n"},
+	})
+	sums := strings.Join([]string{
+		strings.Repeat("a", 64) + "  ./mise-v2026.10.15-linux-x64-musl.tar.gz",
+		checksumLine(archive, "./mise-v2026.10.15-linux-x64.tar.gz"),
+		"",
+	}, "\n")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/SHASUMS256.txt":
+			_, _ = w.Write([]byte(sums))
+		case "/mise-v2026.10.15-linux-x64.tar.gz":
+			_, _ = w.Write(archive)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	installDir := t.TempDir()
+	path, err := BootstrapMise(context.Background(), BootstrapOptions{
+		BaseURL:    server.URL,
+		InstallDir: installDir,
+		OS:         "linux",
+		Arch:       "amd64",
+	})
+	if err != nil {
+		t.Fatalf("BootstrapMise: %v", err)
+	}
+	if path != filepath.Join(installDir, "mise") {
+		t.Fatalf("path = %q", path)
+	}
+}
+
 func TestBootstrapMiseChecksumMismatchFailsClosed(t *testing.T) {
 	t.Parallel()
 	archive := makeTarGz(t, []tarFile{{Name: "mise/bin/mise", Content: "binary"}})

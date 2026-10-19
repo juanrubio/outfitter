@@ -170,12 +170,11 @@ func BootstrapMise(ctx context.Context, opts BootstrapOptions) (string, error) {
 		return "", fmt.Errorf("%w: operating system %q (only linux is supported)", ErrUnsupportedPlatform, opts.OS)
 	}
 
-	archiveName := fmt.Sprintf("mise-latest-%s-%s.tar.gz", opts.OS, arch)
 	checksums, err := downloadBytes(ctx, opts.HTTPClient, opts.BaseURL+"/SHASUMS256.txt", maxChecksumBytes)
 	if err != nil {
 		return "", fmt.Errorf("download mise checksums: %w", err)
 	}
-	expected, err := checksumFor(checksums, archiveName)
+	archiveName, expected, err := checksumForPlatform(checksums, opts.OS, arch)
 	if err != nil {
 		return "", err
 	}
@@ -270,7 +269,9 @@ func downloadTo(ctx context.Context, client *http.Client, rawURL string, dst io.
 	return written, nil
 }
 
-func checksumFor(shasums []byte, archiveName string) (string, error) {
+func checksumForPlatform(shasums []byte, goos, arch string) (string, string, error) {
+	suffix := fmt.Sprintf("-%s-%s.tar.gz", goos, arch)
+	latestName := "mise-latest" + suffix
 	for _, line := range strings.Split(string(shasums), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
@@ -278,19 +279,26 @@ func checksumFor(shasums []byte, archiveName string) (string, error) {
 		}
 		name := strings.TrimPrefix(fields[1], "*")
 		name = strings.TrimPrefix(name, "./")
-		if name != archiveName {
+		if !matchesMiseArchive(name, latestName, suffix) {
 			continue
 		}
 		digest := strings.ToLower(fields[0])
 		if len(digest) != sha256.Size*2 {
-			return "", fmt.Errorf("invalid SHA-256 digest for %s in SHASUMS256.txt", archiveName)
+			return "", "", fmt.Errorf("invalid SHA-256 digest for %s in SHASUMS256.txt", name)
 		}
 		if _, err := hex.DecodeString(digest); err != nil {
-			return "", fmt.Errorf("invalid SHA-256 digest for %s in SHASUMS256.txt: %w", archiveName, err)
+			return "", "", fmt.Errorf("invalid SHA-256 digest for %s in SHASUMS256.txt: %w", name, err)
 		}
-		return digest, nil
+		return name, digest, nil
 	}
-	return "", fmt.Errorf("checksum for %s not found in SHASUMS256.txt", archiveName)
+	return "", "", fmt.Errorf("checksum for %s not found in SHASUMS256.txt", latestName)
+}
+
+func matchesMiseArchive(name, latestName, suffix string) bool {
+	if name == latestName {
+		return true
+	}
+	return strings.HasPrefix(name, "mise-v") && strings.HasSuffix(name, suffix)
 }
 
 func extractMiseBinary(archivePath, installDir string) (string, error) {
