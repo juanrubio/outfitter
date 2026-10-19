@@ -1,8 +1,8 @@
 # Outfitter — Implementation Plan
 
 - **Status:** Ready for phased execution
-- **Source of truth:** [Product & Technical Specification (`SPEC.md`)](SPEC.md) (or `docs/specs/product.md` after Phase 0) and [TUI Experience (`UX.md`)](UX.md) (or `docs/specs/tui.md` after Phase 0)
-- **Visual reference:** [Interactive Mockups (`docs/mockups/index.html`)](docs/mockups/index.html)
+- **Source of truth:** [Product & Technical Specification](specs/product.md) and [TUI Experience & Interaction Specification](specs/tui.md)
+- **Visual reference:** [Interactive Mockups](mockups/index.html)
 - **Execution model:** Each phase is implemented by a spawned **`pi`** harness subagent using `openrouter` model **`deepseek/deepseek-v4.1-flash-1017`** (`https://openrouter.ai/deepseek/deepseek-v4.1-flash-1017`) with **high reasoning effort (`--thinking high`)**, followed by a strict code review and verification gate by the parent lead agent before committing and advancing to the next phase.
 
 ---
@@ -45,7 +45,7 @@ For each phase `N`:
 2. **Independent Code Review by Lead Agent:** When the `pi` subagent finishes, the lead agent:
    - Inspects `git status --porcelain` and `git diff` across all modified and untracked files.
    - Runs `make check` (`go vet ./...`, `golangci-lint`, `docs-check`, `go test ./...`) and `go test -race ./...`.
-   - Audits every file against the Phase `N` exit gate, `SPEC.md`, and `UX.md` (checking for spec drift, swallowed errors, shell-injection risks, raw ANSI colors outside `internal/theme`, or weakened tests).
+   - Audits every file against the Phase `N` exit gate, `docs/specs/product.md`, and `docs/specs/tui.md` (checking for spec drift, swallowed errors, shell-injection risks, raw ANSI colors outside `internal/theme`, or weakened tests).
    - If any `P0` or `P1` issue is found, either sends a targeted fix prompt to `pi` or repairs and re-verifies before recording the review in `docs/evidence/reviews/phase-<N>.md` and committing the phase.
 
 ---
@@ -78,7 +78,7 @@ For each phase `N`:
 - Implement `internal/domain/`:
   - `Tool`: `ID`, `Name`, `Binary`, `CategoryID`, `Backend` (`mise:aqua`, `mise:ubi`, `mise:github`, `mise:npm`, `uv`, `apt`, `vendor`, `source`), `Package`, `Sudo`, `Profiles`, `Description`, `InstallCmd`, `UpdateCmd`, `RemoveCmd`, `SourceDir`, `VersionArgs`, `VersionRegex`, `Disabled`.
   - `ToolState`: `InstalledVersion`, `LatestVersion`, `BinaryPath`, `Provenance` (`mise`, `apt`, `vendor`, `uv`, `source`, `external`, `none`), `CheckStatus` (`unknown`, `checking`, `ready`, `error`), `LastError`.
-  - `DesiredAction`: `ActionNone`, `ActionInstall`, `ActionUpdate`, `ActionRemove`, plus state machine transitions (`Toggle(installed, outdated)` matching `UX.md` §4.1: `[ ]` ↔ `[+]`, `[!]` → `[↑]` → `[-]` → `[!]`, `[✓]` ↔ `[-]`).
+  - `DesiredAction`: `ActionNone`, `ActionInstall`, `ActionUpdate`, `ActionRemove`, plus state machine transitions (`Toggle(installed, outdated)` matching `docs/specs/tui.md` §4.1: `[ ]` ↔ `[+]`, `[!]` → `[↑]` → `[-]` → `[!]`, `[✓]` ↔ `[-]`).
   - `ActionPlan`: computes ordered steps (0: `mise` bootstrap if needed, 1: `apt` installs/updates, 2: `mise`/`uv`/`vendor`/`source` installs, 3: updates, 4: removals), `NeedsSudo()`, and summary counts (`+install`, `↑update`, `-remove`).
 - Implement `internal/catalog/`:
   - Embed `default_catalog.toml` containing all 31 tools, 4 categories (`harnesses`, `ai-tuis`, `terminal`, `utilities`), and 4 preset profiles (`desktop`, `server`, `harnesses`, `minimal`) matching `docs/specs/product.md` §4 and `docs/mockups/fixtures.js`.
@@ -99,7 +99,7 @@ For each phase `N`:
 
 **Tasks:**
 - Implement `internal/theme/`:
-  - Semantic tokens matching `UX.md` §6 (`Canvas`, `Surface`, `Border`, `Text`, `Muted`, `Accent`, `Good`, `Low`, `Error`, `Stale`) across `Midnight` (dark), `Daylight` (light), and `Monochrome` (`NO_COLOR` safe).
+  - Semantic tokens matching `docs/specs/tui.md` §6 (`Canvas`, `Surface`, `Border`, `Text`, `Muted`, `Accent`, `Good`, `Low`, `Error`, `Stale`) across `Midnight` (dark), `Daylight` (light), and `Monochrome` (`NO_COLOR` safe).
   - Zero raw hex colors allowed inside `internal/tui/`.
 - Implement `internal/demo/`:
   - Deterministic demo state provider mirroring `docs/mockups/fixtures.js` (same installed/outdated/uninstalled versions, paths, provenance, and pre-queued demo items) with zero subprocess, filesystem, or network calls.
@@ -120,7 +120,7 @@ For each phase `N`:
 
 ### Phase 3 — TUI State Machine, Modals (Profiles, Plan & Apply, Live Progress, Help), and Golden Tests
 
-**Goal:** Complete interactive keyboard workflow in `internal/tui/` matching `UX.md` §4–§5, verified by state-transition and golden snapshot tests.
+**Goal:** Complete interactive keyboard workflow in `internal/tui/` matching `docs/specs/tui.md` §4–§5, verified by state-transition and golden snapshot tests.
 
 **Tasks:**
 - Implement full keyboard state machine in `internal/tui/`:
@@ -136,7 +136,7 @@ For each phase `N`:
 - Add golden render tests and interactive state transition tests (`internal/tui/tui_test.go`) covering `120×40` and `80×24` across all views.
 
 **Exit Gate:**
-- All keyboard shortcuts in `UX.md` §5 are tested and functional.
+- All keyboard shortcuts in `docs/specs/tui.md` §5 are tested and functional.
 - Golden snapshot tests verify `Catalog`, `Outdated`, `Profile Selector`, `Plan & Apply`, `Live Execution Progress`, `Missing mise banner`, `Compact 80×24`, and `Help` views.
 - `make check` and `make race` pass.
 

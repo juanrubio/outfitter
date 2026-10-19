@@ -6,7 +6,7 @@ Outfitter (`outfitter`) is a keyboard-first Go TUI and scriptable CLI for bootst
 
 It wraps [`mise`](https://mise.jdx.dev) (which manages `aqua`, `ubi`, GitHub Releases, `npm`, and `uv` tools plus isolated Node/Python runtimes) alongside thin adapters for Debian/Ubuntu `apt` packages and self-updating vendor harnesses (`claude`, `muse`, `agy`, `opencode`, `codexbar`).
 
-**Project status:** Specifications ([`SPEC.md`](SPEC.md), [`UX.md`](UX.md)) and interactive terminal mockups ([`docs/mockups/index.html`](docs/mockups/index.html)) are ready for review.
+**Project status:** Specifications ([`docs/specs/product.md`](docs/specs/product.md), [`docs/specs/tui.md`](docs/specs/tui.md)) and interactive terminal mockups ([`docs/mockups/index.html`](docs/mockups/index.html)) are ready for review.
 
 ---
 
@@ -29,8 +29,9 @@ See the [mockup implementer guide](docs/mockups/README.md) for the screen index 
 
 ## Project Documents
 
-- [**Product & Technical Specification (`SPEC.md`)**](SPEC.md) — Architecture, `mise`/`apt`/`vendor`/`source` adapters, built-in catalog, `catalog.toml` schema, CLI contract, and implementation stages.
-- [**TUI Experience & Interaction Specification (`UX.md`)**](UX.md) — Layouts (`120×40` split view and `80×24` compact view), checkbox state machine, profile selector, dry-run plan review, live execution view, and color tokens.
-- [**Implementation Plan (`IMPLEMENTATION_PLAN.md`)**](IMPLEMENTATION_PLAN.md) — Phased execution plan (Phases 0–6), subagent delegation with `pi` + DeepSeek Flash, review gates, and traceability matrix.
+- [**Documentation Index (`docs/README.md`)**](docs/README.md) — Entry point and map of all project documentation.
+- [**Product & Technical Specification (`docs/specs/product.md`)**](docs/specs/product.md) — Architecture, `mise`/`apt`/`vendor`/`source` adapters, built-in catalog, `catalog.toml` schema, CLI contract, and implementation stages.
+- [**TUI Experience & Interaction Specification (`docs/specs/tui.md`)**](docs/specs/tui.md) — Layouts (`120×40` split view and `80×24` compact view), checkbox state machine, profile selector, dry-run plan review, live execution view, and color tokens.
+- [**Implementation Plan (`docs/implementation-plan.md`)**](docs/implementation-plan.md) — Phased execution plan (Phases 0–6), subagent delegation with `pi` + DeepSeek Flash, review gates, and traceability matrix.
 - [**Goal Execution Prompt (`docs/prompts/implement-all-phases.md`)**](docs/prompts/implement-all-phases.md) — Autonomous `/goal` prompt for implementing and reviewing all phases end-to-end.
 - [**Interactive Mockups (`docs/mockups/index.html`)**](docs/mockups/index.html) — Offline character-grid browser reference with 8 interactive scenarios.

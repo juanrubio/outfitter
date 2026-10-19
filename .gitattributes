@@ -1,0 +1,5 @@
+# Keep Markdown and generated terminal artifacts predictable across platforms.
+*.md text eol=lf
+docs/mockups/*.html text eol=lf
+docs/mockups/*.js text eol=lf
+docs/mockups/*.css text eol=lf

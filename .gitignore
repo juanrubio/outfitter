@@ -1,0 +1,15 @@
+# Go binaries and local build output.
+/outfitter
+dist/
+*.test
+*.out
+
+# Local development state and generated captures.
+/.local/
+/captures/
+*.log
+__pycache__/
+*.py[cod]
+
+# Operating system and editor noise.
+.DS_Store

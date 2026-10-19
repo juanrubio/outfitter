@@ -2,8 +2,8 @@
 
 - **Status:** Draft v1
 - **Date:** 2026-10-19
-- **Related:** [SPEC.md](SPEC.md)
-- **Interactive design reference:** [docs/mockups/index.html](docs/mockups/index.html)
+- **Related:** [Product & Technical Specification](product.md)
+- **Interactive design reference:** [docs/mockups/index.html](../mockups/index.html)
 
 ---
 

@@ -4,8 +4,8 @@
 - **Status:** Draft v1
 - **Date:** 2026-10-19
 - **Platform:** Debian and Ubuntu Linux (`amd64`, `arm64`)
-- **Interaction specification:** [UX.md](UX.md)
-- **Interactive design reference:** [docs/mockups/index.html](docs/mockups/index.html)
+- **Interaction specification:** [TUI Experience & Interaction Specification](tui.md)
+- **Interactive design reference:** [docs/mockups/index.html](../mockups/index.html)
 
 ---
 
