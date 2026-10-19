@@ -431,12 +431,19 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "detail":
-		switch keystroke {
-		case "esc", "q":
+		switch {
+		case keystroke == "esc" || keystroke == "q":
 			m.view = "catalog"
-		case " ", "space":
+		case keystroke == " " || keystroke == "space" || key.Key().Code == tea.KeySpace:
 			m.toggleSelected()
+		case keystroke == "i" || keystroke == "+" || keystroke == "U":
+			m.queueFocusedUpdate()
 		}
+		return m, nil
+	}
+
+	if key.Key().Code == tea.KeySpace {
+		m.toggleSelected()
 		return m, nil
 	}
 
@@ -464,7 +471,7 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.toggleSelected()
 	case "u":
 		m.queueAllUpdates()
-	case "U":
+	case "U", "i", "+":
 		m.queueFocusedUpdate()
 	case "g":
 		m.toggleFocusedCategoryActions()

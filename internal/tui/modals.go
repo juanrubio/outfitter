@@ -425,7 +425,7 @@ func (m *Model) helpBox(width, height int) []string {
 		{"Tab", "Collapse or expand the currently focused category"},
 		{"Space", "Toggle desired action for selected tool ([ ] ↔ [+], [!] → [↑] → [-], [✓] ↔ [-])"},
 		{"u", "Queue updates ([↑]) for ALL outdated tools in the catalog at once"},
-		{"U", "Queue an update for the focused tool only"},
+		{"i / + / U", "Queue install ([+]) or update ([↑]) for the focused tool"},
 		{"g", "Toggle all tools in the focused category"},
 		{"p", "Open Preset Profile selector (Full Desktop, Headless Server, Harnesses, Minimal)"},
 		{"a", "Open Plan & Apply dry-run confirmation screen"},
