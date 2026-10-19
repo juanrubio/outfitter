@@ -154,6 +154,39 @@ var stateSpecs = map[string]stateSpec{
 	"btop": {
 		latest: "1.3.2", provenance: domain.ProvenanceNone, detail: "Not installed",
 	},
+	"zoxide": {
+		installed: "0.9.6", latest: "0.9.6", path: "~/.local/share/mise/shims/zoxide",
+		provenance: domain.ProvenanceMise,
+		detail:     "Managed by mise (aqua:ajeetdsouza/zoxide)",
+	},
+	"eza": {
+		installed: "0.20.2", latest: "0.20.2", path: "~/.local/share/mise/shims/eza",
+		provenance: domain.ProvenanceMise,
+		detail:     "Managed by mise (aqua:eza-community/eza)",
+	},
+	"bat": {
+		installed: "0.25.0", latest: "0.25.0", path: "~/.local/share/mise/shims/bat",
+		provenance: domain.ProvenanceMise,
+		detail:     "Managed by mise (aqua:sharkdp/bat)",
+	},
+	"dust": {
+		installed: "1.1.1", latest: "1.1.1", path: "~/.local/share/mise/shims/dust",
+		provenance: domain.ProvenanceMise,
+		detail:     "Managed by mise (aqua:bootandy/dust)",
+	},
+	"broot": {
+		installed: "1.44.2", latest: "1.44.2", path: "~/.local/share/mise/shims/broot",
+		provenance: domain.ProvenanceMise,
+		detail:     "Managed by mise (ubi:Canop/broot)",
+	},
+	"tig": {
+		installed: "2.5.8", latest: "2.5.8", path: "/usr/bin/tig",
+		provenance: domain.ProvenanceAPT, detail: "System package (apt)",
+	},
+	"htop": {
+		installed: "3.3.0", latest: "3.3.0", path: "/usr/bin/htop",
+		provenance: domain.ProvenanceAPT, detail: "System package (apt)",
+	},
 	"browser-use": {
 		installed: "0.12.9", latest: "0.13.1", path: "~/.local/bin/browser-use",
 		provenance: domain.ProvenanceUV,
@@ -183,6 +216,11 @@ var stateSpecs = map[string]stateSpec{
 		installed: "1.50.0", latest: "1.50.0", path: "~/.local/bin/hcloud",
 		provenance: domain.ProvenanceMise,
 		detail:     "Managed by mise (aqua:hetznercloud/cli)",
+	},
+	"visidata": {
+		installed: "3.1.1", latest: "3.1.1", path: "~/.local/bin/vd",
+		provenance: domain.ProvenanceUV,
+		detail:     "Managed by uv tool (~/.local/share/uv/tools/visidata)",
 	},
 }
 

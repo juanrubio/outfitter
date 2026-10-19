@@ -35,7 +35,8 @@ tools = [
   "claude-code", "codex", "muse", "antigravity-cli", "opencode", "pi", "gemini-cli", "copilot-cli",
   "boardwalk", "trailmark", "quotary", "codexbar", "openclaw", "mercadona-cli",
   "tmux", "hive", "gh", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
-  "browser-use", "mcporter", "oracle", "summarize", "wacli", "hcloud",
+  "zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
+  "browser-use", "mcporter", "oracle", "summarize", "wacli", "hcloud", "visidata",
 ]
 
 [[profiles]]
@@ -47,7 +48,8 @@ tools = [
   "claude-code", "codex", "muse", "antigravity-cli", "opencode",
   "boardwalk", "trailmark", "openclaw", "mercadona-cli",
   "tmux", "hive", "gh", "lazygit", "fzf", "delta", "ripgrep", "fd", "jq", "btop",
-  "wacli", "hcloud",
+  "zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
+  "wacli", "hcloud", "visidata",
 ]
 
 [[profiles]]
@@ -63,9 +65,9 @@ tools = [
 id = "minimal"
 name = "Minimal Core"
 short = "Minimal"
-description = "Essential daily drivers: Claude Code, Codex, Boardwalk, Trailmark, tmux, gh, fzf, rg, jq."
+description = "Essential daily drivers: Claude Code, Codex, Boardwalk, Trailmark, tmux, gh, fzf, rg, jq, zoxide."
 tools = [
-  "claude-code", "codex", "boardwalk", "trailmark", "tmux", "gh", "fzf", "ripgrep", "jq",
+  "claude-code", "codex", "boardwalk", "trailmark", "tmux", "gh", "fzf", "ripgrep", "jq", "zoxide",
 ]
 
 # Category 1: Coding Harnesses
@@ -474,6 +476,118 @@ remove_cmd = "sudo apt-get remove -y btop"
 version_args = ["--version"]
 version_regex = 'btop version ([0-9]+\.[0-9]+\.[0-9]+)'
 
+[[tools]]
+id = "zoxide"
+name = "zoxide"
+binary = "zoxide"
+category = "terminal"
+backend = "mise:aqua"
+package = "ajeetdsouza/zoxide"
+sudo = false
+profiles = ["desktop", "server", "minimal"]
+description = "Smarter cd command inspired by z and autojump that learns your most used directories."
+install_cmd = "mise use --global aqua:ajeetdsouza/zoxide@latest"
+update_cmd = "mise upgrade aqua:ajeetdsouza/zoxide"
+remove_cmd = "mise unuse --global aqua:ajeetdsouza/zoxide"
+version_args = ["--version"]
+version_regex = 'zoxide v?([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "eza"
+name = "eza"
+binary = "eza"
+category = "terminal"
+backend = "mise:aqua"
+package = "eza-community/eza"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Modern, maintained replacement for ls and exa with Git status and tree views."
+install_cmd = "mise use --global aqua:eza-community/eza@latest"
+update_cmd = "mise upgrade aqua:eza-community/eza"
+remove_cmd = "mise unuse --global aqua:eza-community/eza"
+version_args = ["--version"]
+version_regex = 'v?([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "bat"
+name = "bat"
+binary = "bat"
+category = "terminal"
+backend = "mise:aqua"
+package = "sharkdp/bat"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Cat clone with syntax highlighting, Git integration, and fzf preview support."
+install_cmd = "mise use --global aqua:sharkdp/bat@latest"
+update_cmd = "mise upgrade aqua:sharkdp/bat"
+remove_cmd = "mise unuse --global aqua:sharkdp/bat"
+version_args = ["--version"]
+version_regex = 'bat ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "dust"
+name = "dust"
+binary = "dust"
+category = "terminal"
+backend = "mise:aqua"
+package = "bootandy/dust"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Intuitive disk usage analyzer in Rust; visual replacement for du."
+install_cmd = "mise use --global aqua:bootandy/dust@latest"
+update_cmd = "mise upgrade aqua:bootandy/dust"
+remove_cmd = "mise unuse --global aqua:bootandy/dust"
+version_args = ["--version"]
+version_regex = 'Dust ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "broot"
+name = "broot"
+binary = "broot"
+category = "terminal"
+backend = "mise:ubi"
+package = "Canop/broot"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Interactive directory tree navigator and fuzzy file manager."
+install_cmd = "mise use --global ubi:Canop/broot@latest"
+update_cmd = "mise upgrade ubi:Canop/broot"
+remove_cmd = "mise unuse --global ubi:Canop/broot"
+version_args = ["--version"]
+version_regex = 'broot ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "tig"
+name = "tig"
+binary = "tig"
+category = "terminal"
+backend = "apt"
+package = "tig"
+sudo = true
+profiles = ["desktop", "server"]
+description = "Ncurses text-mode interface for Git repositories and commit history."
+install_cmd = "sudo apt-get install -y tig"
+update_cmd = "sudo apt-get install --only-upgrade -y tig"
+remove_cmd = "sudo apt-get remove -y tig"
+version_args = ["--version"]
+version_regex = 'tig version ([0-9]+\.[0-9]+(?:\.[0-9]+)?)'
+
+[[tools]]
+id = "htop"
+name = "htop"
+binary = "htop"
+category = "terminal"
+backend = "apt"
+package = "htop"
+sudo = true
+profiles = ["desktop", "server"]
+description = "Interactive process viewer and system monitor."
+install_cmd = "sudo apt-get install -y htop"
+update_cmd = "sudo apt-get install --only-upgrade -y htop"
+remove_cmd = "sudo apt-get remove -y htop"
+version_args = ["--version"]
+version_regex = 'htop ([0-9]+\.[0-9]+\.[0-9]+)'
+
 # Category 4: Agent & CLI Utilities
 
 [[tools]]
@@ -571,3 +685,19 @@ update_cmd = "mise upgrade aqua:hetznercloud/cli"
 remove_cmd = "mise unuse --global aqua:hetznercloud/cli"
 version_args = ["version"]
 version_regex = 'hcloud ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "visidata"
+name = "VisiData"
+binary = "vd"
+category = "utilities"
+backend = "uv"
+package = "visidata"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Interactive terminal spreadsheet and tabular data explorer for CSV, JSONL, and SQLite."
+install_cmd = "mise x uv -- uv tool install visidata"
+update_cmd = "mise x uv -- uv tool upgrade visidata"
+remove_cmd = "mise x uv -- uv tool uninstall visidata"
+version_args = ["--version"]
+version_regex = 'saul\.pw/VisiData v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)|v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)'

@@ -125,8 +125,8 @@ func TestStatusHumanAndJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &entries); err != nil {
 		t.Fatalf("status --json is not valid JSON: %v\n%s", err, out)
 	}
-	if len(entries) != 31 {
-		t.Fatalf("status entries = %d, want 31", len(entries))
+	if len(entries) != 39 {
+		t.Fatalf("status entries = %d, want 39", len(entries))
 	}
 	found := false
 	for _, entry := range entries {
@@ -207,8 +207,8 @@ func TestCheckHumanJSONAndCache(t *testing.T) {
 	if payload.OutdatedCount != 1 || len(payload.Updates) != 1 || payload.Updates[0] != "codex" {
 		t.Fatalf("unexpected check payload: %+v", payload)
 	}
-	if len(payload.Tools) != 31 {
-		t.Fatalf("check tools = %d, want 31", len(payload.Tools))
+	if len(payload.Tools) != 39 {
+		t.Fatalf("check tools = %d, want 39", len(payload.Tools))
 	}
 }
 
@@ -543,7 +543,7 @@ func TestCatalogExportParses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("exported catalog does not parse: %v\n%s", err, out)
 	}
-	if len(parsed.Tools) != 31 || len(parsed.Profiles) != 4 {
+	if len(parsed.Tools) != 39 || len(parsed.Profiles) != 4 {
 		t.Fatalf("exported catalog has %d tools and %d profiles", len(parsed.Tools), len(parsed.Profiles))
 	}
 }

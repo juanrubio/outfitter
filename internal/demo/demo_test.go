@@ -18,11 +18,11 @@ func TestLoadSnapshot(t *testing.T) {
 	if snapshot.Catalog == nil {
 		t.Fatal("catalog is nil")
 	}
-	if len(snapshot.Catalog.Tools) != 31 {
-		t.Fatalf("catalog tools = %d, want 31", len(snapshot.Catalog.Tools))
+	if len(snapshot.Catalog.Tools) != 39 {
+		t.Fatalf("catalog tools = %d, want 39", len(snapshot.Catalog.Tools))
 	}
-	if len(snapshot.States) != 31 {
-		t.Fatalf("states = %d, want 31", len(snapshot.States))
+	if len(snapshot.States) != 39 {
+		t.Fatalf("states = %d, want 39", len(snapshot.States))
 	}
 	if !snapshot.MiseInstalled {
 		t.Fatal("demo mise should be installed")
@@ -51,8 +51,8 @@ func TestSnapshotCounts(t *testing.T) {
 			outdated = append(outdated, id)
 		}
 	}
-	if installed != 26 {
-		t.Fatalf("installed = %d, want 26", installed)
+	if installed != 34 {
+		t.Fatalf("installed = %d, want 34", installed)
 	}
 	wantOutdated := map[string]bool{
 		"codex": true, "muse": true, "trailmark": true, "lazygit": true, "browser-use": true,

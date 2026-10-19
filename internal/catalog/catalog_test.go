@@ -21,14 +21,15 @@ func TestLoadDefault(t *testing.T) {
 		t.Fatalf("settings = %#v, want %#v", cat.Settings, domain.DefaultSettings())
 	}
 
-	if len(cat.Tools) != 31 {
-		t.Fatalf("tools = %d, want 31", len(cat.Tools))
+	if len(cat.Tools) != 39 {
+		t.Fatalf("tools = %d, want 39", len(cat.Tools))
 	}
 	wantIDs := []string{
 		"claude-code", "codex", "muse", "antigravity-cli", "opencode", "pi", "gemini-cli", "copilot-cli",
 		"boardwalk", "trailmark", "quotary", "codexbar", "openclaw", "mercadona-cli",
 		"tmux", "hive", "gh", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
-		"browser-use", "mcporter", "oracle", "summarize", "wacli", "hcloud",
+		"zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
+		"browser-use", "mcporter", "oracle", "summarize", "wacli", "hcloud", "visidata",
 	}
 	for index, want := range wantIDs {
 		if cat.Tools[index].ID != want {
@@ -50,8 +51,8 @@ func TestLoadDefault(t *testing.T) {
 	}{
 		{"harnesses", 1, "CODING HARNESSES", 8},
 		{"ai-tuis", 2, "AI TUIS & PERSONAL TOOLS", 6},
-		{"terminal", 3, "TERMINAL & SESSION MANAGEMENT", 11},
-		{"utilities", 4, "AGENT & CLI UTILITIES", 6},
+		{"terminal", 3, "TERMINAL & SESSION MANAGEMENT", 18},
+		{"utilities", 4, "AGENT & CLI UTILITIES", 7},
 	}
 	for index, want := range categories {
 		got := cat.Categories[index]
@@ -64,10 +65,10 @@ func TestLoadDefault(t *testing.T) {
 	}
 
 	profiles := map[string]int{
-		"desktop":   31,
-		"server":    21,
+		"desktop":   39,
+		"server":    29,
 		"harnesses": 8,
-		"minimal":   9,
+		"minimal":   10,
 	}
 	for id, want := range profiles {
 		profile, ok := cat.ProfileByID(id)
@@ -80,17 +81,17 @@ func TestLoadDefault(t *testing.T) {
 		}
 	}
 
-	if got := len(cat.Profiles[0].Tools); got != 31 {
-		t.Fatalf("desktop profile has %d tools, want 31", got)
+	if got := len(cat.Profiles[0].Tools); got != 39 {
+		t.Fatalf("desktop profile has %d tools, want 39", got)
 	}
-	if got := len(cat.Profiles[1].Tools); got != 21 {
-		t.Fatalf("server profile has %d tools, want 21", got)
+	if got := len(cat.Profiles[1].Tools); got != 29 {
+		t.Fatalf("server profile has %d tools, want 29", got)
 	}
 	if got := len(cat.Profiles[2].Tools); got != 8 {
 		t.Fatalf("harnesses profile has %d tools, want 8", got)
 	}
-	if got := len(cat.Profiles[3].Tools); got != 9 {
-		t.Fatalf("minimal profile has %d tools, want 9", got)
+	if got := len(cat.Profiles[3].Tools); got != 10 {
+		t.Fatalf("minimal profile has %d tools, want 10", got)
 	}
 
 	for _, tool := range cat.Tools {
@@ -216,8 +217,8 @@ tools = ["tmux", "gh", "claude-code", "codex", "openclaw", "boardwalk", "ripgrep
 		t.Fatal(err)
 	}
 
-	if len(cat.Tools) != 32 {
-		t.Fatalf("tools = %d, want 32", len(cat.Tools))
+	if len(cat.Tools) != 40 {
+		t.Fatalf("tools = %d, want 40", len(cat.Tools))
 	}
 	if len(cat.Categories) != 4 {
 		t.Fatalf("categories = %d, want 4", len(cat.Categories))
@@ -324,8 +325,8 @@ disabled = true
 	if _, ok := cat.ToolByID("btop"); ok {
 		t.Fatal("disabled btop should not be active")
 	}
-	if len(cat.Tools) != 30 {
-		t.Fatalf("tools = %d, want 30", len(cat.Tools))
+	if len(cat.Tools) != 38 {
+		t.Fatalf("tools = %d, want 38", len(cat.Tools))
 	}
 
 	for _, profileID := range []string{"desktop", "server"} {
@@ -599,8 +600,8 @@ func TestLoadFromEmptyBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cat.Tools) != 31 {
-		t.Fatalf("tools = %d, want 31", len(cat.Tools))
+	if len(cat.Tools) != 39 {
+		t.Fatalf("tools = %d, want 39", len(cat.Tools))
 	}
 }
 
@@ -612,8 +613,8 @@ func TestLoadUsesDefaultUserCatalogWhenPresent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cat.Tools) != 31 {
-		t.Fatalf("tools without user catalog = %d, want 31", len(cat.Tools))
+	if len(cat.Tools) != 39 {
+		t.Fatalf("tools without user catalog = %d, want 39", len(cat.Tools))
 	}
 
 	dir := filepath.Join(home, ".config", "outfitter")
