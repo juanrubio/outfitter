@@ -9,7 +9,7 @@ after its exit gate passes and a review record is written under
 | :--- | :--- | :--- | :--- |
 | 0 | Repository, Documentation Layout, and Tooling Foundation | Complete | `make check`, `make build` |
 | 1 | Domain Model, Embedded Catalog, and `catalog.toml` Merger | Complete | `make check`, `make race`, `make build` |
-| 2 | Theme System, Demo Backend, and TUI Layouts | Not started | — |
+| 2 | Theme System, Demo Backend, and TUI Layouts | Complete | `make check`, `make race`, `make build` |
 | 3 | TUI State Machine, Modals, and Golden Tests | Not started | — |
 | 4 | State Discovery, Version Inspector, and `mise` Bootstrapper | Not started | — |
 | 5 | Execution Adapters and Live Runner | Not started | — |
@@ -43,6 +43,26 @@ after its exit gate passes and a review record is written under
   default catalog contents, the product specification's user-catalog example,
   disabling tools, settings and profile merging, validation failures, and
   package import boundaries.
+- Verification: `make check`, `make race`, and `make build` exit 0.
+
+## Phase 2 Evidence
+
+- `internal/theme` defines the `Midnight`, `Daylight`, and `Monochrome`
+  palettes with the ten semantic tokens, `NO_COLOR` resolution, Lip Gloss v2
+  styles, and `ByToken` lookup for `domain.Marker` tokens.
+- `internal/demo` loads the 31-tool catalog with the `quotary` source override
+  and the deterministic fictional fixture state (26 installed, 5 outdated, and
+  `gemini-cli`/`quotary` pre-queued for install) without filesystem discovery,
+  subprocess execution, or network access.
+- `internal/tui` provides the exported `NewModel` model, header and action
+  bars, scrollable collapsible catalog, wide `99+`-column Inspector + Pending
+  Action Plan split, compact `80×24` full-width list with `Enter`/`Esc`
+  inspector navigation, and exact-width rendering across `160×48`, `120×40`,
+  `100×32`, and `80×24`.
+- Tests verify palette values, monochrome grayscale tokens, `NO_COLOR` mode
+  resolution, fixture counts and versions, offline demo imports, screen
+  dimensions, all marker glyphs across themes, compact detail navigation, and
+  the absence of raw hex color literals under `internal/tui/`.
 - Verification: `make check`, `make race`, and `make build` exit 0.
 
 ## Phase Status Legend
