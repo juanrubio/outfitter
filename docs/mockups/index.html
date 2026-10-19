@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Outfitter · visual references</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="review-header">
+    <div>
+      <span class="eyebrow">OUTFITTER / DESIGN REFERENCE 01</span>
+      <h1>Your AI development toolkit, installed and kept current.</h1>
+      <p>A keyboard-first TUI wrapping mise, Debian/Ubuntu apt, and vendor installers with a safe Plan &amp; Apply workflow.</p>
+    </div>
+    <a href="README.md">Implementer notes ↗</a>
+  </header>
+  <main>
+    <section class="controls" aria-label="Reference controls, outside the proposed TUI">
+      <label>SCREEN
+        <select id="screen">
+          <option value="catalog">01 · Catalog desk</option>
+          <option value="outdated">02 · Outdated &amp; bulk update (u)</option>
+          <option value="profiles">03 · Profile selector (p)</option>
+          <option value="plan">04 · Dry-run Plan &amp; Apply (a)</option>
+          <option value="applying">05 · Live execution progress</option>
+          <option value="bootstrap">06 · Missing mise auto-bootstrap</option>
+          <option value="custom">07 · Custom catalog.toml override</option>
+          <option value="help">08 · Keyboard help (?)</option>
+        </select>
+      </label>
+      <label>TERMINAL
+        <select id="size">
+          <option>160×48</option>
+          <option selected>120×40</option>
+          <option>100×32</option>
+          <option>80×24</option>
+        </select>
+      </label>
+      <label>APPEARANCE
+        <select id="theme">
+          <option value="dark">Midnight</option>
+          <option value="light">Daylight</option>
+          <option value="mono">Monochrome</option>
+        </select>
+      </label>
+      <button id="queue-updates" type="button">Queue all updates (u)</button>
+      <button id="reset" type="button">Reset reference</button>
+      <span class="reference-only">FICTIONAL STATE · NO SHELL EXECUTION</span>
+    </section>
+    <div class="stage" id="stage">
+      <div class="terminal-frame" id="terminal-frame">
+        <div class="window-chrome">
+          <span>outfitter</span>
+          <span id="dimensions">120 columns × 40 rows</span>
+          <span>REFERENCE</span>
+        </div>
+        <pre id="terminal" tabindex="0" role="application" aria-label="Interactive Outfitter reference. Click and press question mark for keyboard shortcuts."></pre>
+      </div>
+    </div>
+    <div class="caption"><p id="caption"></p><span id="scale-note"></span></div>
+    <section class="reading-notes">
+      <article>
+        <span class="eyebrow">01 / THE CATALOG</span>
+        <h2>One rig across six package channels.</h2>
+        <p>31 AI development tools grouped into Coding Harnesses, AI TUIs, Terminal &amp; Session Management, and Agent Utilities. Uses mise for aqua/ubi/npm/uv and thin adapters for Debian apt and vendor updaters.</p>
+      </article>
+      <article>
+        <span class="eyebrow">02 / THE INTERACTION</span>
+        <h2>Select visually. Apply deliberately.</h2>
+        <p>Click the terminal, then use j/k, Space to toggle, u to queue all outdated tools, g to toggle a category, p to load a profile (Desktop vs. Server), / to search, and a to inspect the dry-run execution plan.</p>
+      </article>
+      <article>
+        <span class="eyebrow">03 / THE HANDOFF</span>
+        <h2>Every character has a cell.</h2>
+        <p>The terminal is rendered as a fixed character grid matching Bubble Tea v2 and Lip Gloss v2. Browser controls and window chrome are review tools only; follow SPEC.md and UX.md for implementation.</p>
+      </article>
+    </section>
+  </main>
+  <script src="fixtures.js"></script>
+  <script src="mockup.js"></script>
+</body>
+</html>
