@@ -610,3 +610,22 @@ func TestAllViewsScreenGeometry(t *testing.T) {
 		}
 	}
 }
+
+func TestProgramEnvDowngradesKittyTerm(t *testing.T) {
+	original := []string{"HOME=/tmp", "TERM=xterm-kitty", "LANG=en_US.UTF-8"}
+	out, kitty := programEnv(original)
+	if !kitty {
+		t.Fatal("expected kitty detection")
+	}
+	if out[1] != "TERM=xterm-256color" {
+		t.Fatalf("got %q, want TERM=xterm-256color", out[1])
+	}
+	if original[1] != "TERM=xterm-kitty" {
+		t.Fatal("programEnv mutated the input slice")
+	}
+
+	other, kitty := programEnv([]string{"TERM=tmux-256color"})
+	if kitty || other[0] != "TERM=tmux-256color" {
+		t.Fatalf("unexpected rewrite for non-kitty terminal: %v (%v)", other, kitty)
+	}
+}

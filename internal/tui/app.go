@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"golang.org/x/term"
 
 	"github.com/juanrubio/outfitter/internal/adapter"
@@ -287,9 +288,38 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 	m.baseCtx = ctx
-	p := tea.NewProgram(m, tea.WithContext(ctx))
+	env, kitty := programEnv(os.Environ())
+	progOpts := []tea.ProgramOption{tea.WithContext(ctx), tea.WithEnvironment(env)}
+	if kitty && m.mode != theme.ModeMono {
+		progOpts = append(progOpts, tea.WithColorProfile(colorprofile.TrueColor))
+	}
+	p := tea.NewProgram(m, progOpts...)
 	_, err = p.Run()
 	return err
+}
+
+// programEnv returns a copy of env adapted for the Bubble Tea renderer,
+// reporting whether the terminal is Kitty. Ultraviolet enables CSI b (REP,
+// repeat previous character) purely from TERM=xterm-kitty, but Kitty 0.16 has
+// no REP handler and silently drops the sequence: every REP-compressed run of
+// padding spaces or box-drawing characters vanishes and subsequent columns and
+// borders shift left. Presenting TERM=xterm-256color keeps the renderer on ECH
+// erasure, which Kitty 0.16 implements correctly.
+func programEnv(env []string) ([]string, bool) {
+	out := make([]string, len(env))
+	copy(out, env)
+	for index, kv := range out {
+		termVal, ok := strings.CutPrefix(kv, "TERM=")
+		if !ok {
+			continue
+		}
+		if strings.Contains(termVal, "kitty") {
+			out[index] = "TERM=xterm-256color"
+			return out, true
+		}
+		return out, false
+	}
+	return out, false
 }
 
 // Init implements tea.Model. Live sessions with no supplied snapshot start a
