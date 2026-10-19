@@ -86,7 +86,7 @@ func (m *Model) renderCatalog() []string {
 		leftLines = append(leftLines, m.renderSpans(m.toolLine(*row.tool, listWidth, selected), listWidth, background))
 	}
 	for len(leftLines) < listHeight {
-		leftLines = append(leftLines, strings.Repeat(" ", listWidth))
+		leftLines = append(leftLines, m.blankCell(listWidth))
 	}
 
 	if wide {
@@ -94,12 +94,14 @@ func (m *Model) renderCatalog() []string {
 		if ok {
 			rightWidth := m.width - listWidth - 6
 			rightLines := m.inspectorBlock(tool, rightWidth, listHeight)
+			gutter := m.blankCell(2)
 			for index := 0; index < listHeight; index++ {
-				lines = append(lines, "  "+leftLines[index]+"  "+rightLines[index]+"  ")
+				lines = append(lines, gutter+leftLines[index]+gutter+rightLines[index]+gutter)
 			}
 		} else {
+			gutter := m.blankCell(2)
 			for _, line := range leftLines {
-				lines = append(lines, "  "+line+"  ")
+				lines = append(lines, gutter+line+gutter)
 			}
 		}
 	} else {
@@ -137,7 +139,15 @@ func (m *Model) screenLineText(content string, width int) string {
 	if width <= 4 {
 		return truncateDisplay(content, width)
 	}
-	return "  " + content + "  "
+	gutter := m.blankCell(2)
+	return gutter + content + gutter
+}
+
+func (m *Model) blankCell(width int) string {
+	if width <= 0 {
+		return ""
+	}
+	return m.styles.ByToken("canvas").Render(strings.Repeat(" ", width))
 }
 
 func (m *Model) catalogFooterHint() string {
@@ -352,16 +362,15 @@ func (m *Model) toolLine(tool domain.Tool, width int, selected bool) []span {
 	marker, markerToken, _ := domain.Marker(action, state.IsInstalled(), state.IsOutdated())
 
 	backendWidth := 0
-	if width >= 56 {
-		backendWidth = 11
+	if width >= 54 {
+		backendWidth = 10
 	}
-	versionWidth := clampInt(width-28-backendWidth, 14, 21)
-	nameWidth := clampInt(width-6-versionWidth-backendWidth-2, 12, 22)
-	fixedWidth := 1 + 1 + 4 + nameWidth + 1 + versionWidth + backendWidth
-	gapWidth := width - fixedWidth
-	if gapWidth < 1 {
-		gapWidth = 1
+	nameWidth := clampInt(width-36, 12, 22)
+	fixedWidth := 1 + 1 + 4 + nameWidth + 1 + backendWidth
+	if backendWidth > 0 {
+		fixedWidth++
 	}
+	versionWidth := maxInt(width-fixedWidth, 12)
 
 	cursor := " "
 	cursorToken := "muted"
@@ -384,32 +393,45 @@ func (m *Model) toolLine(tool domain.Tool, width int, selected bool) []span {
 		{text: padDisplay(tool.Name, nameWidth), token: nameToken, bold: selected},
 		{text: " ", token: "text"},
 		{text: padDisplay(versionText, versionWidth), token: versionToken, bold: action != "" && action != domain.ActionNone},
-		{text: strings.Repeat(" ", gapWidth), token: "text"},
 	}
 	if backendWidth > 0 {
 		backendToken := "muted"
 		if tool.Backend == domain.BackendAPT {
 			backendToken = "low"
 		}
-		spans = append(spans, span{text: padDisplay(string(tool.Backend), backendWidth), token: backendToken})
+		spans = append(spans,
+			span{text: " ", token: "text"},
+			span{text: padDisplay(string(tool.Backend), backendWidth), token: backendToken},
+		)
 	}
 	return spans
 }
 
 func (m *Model) toolVersion(state domain.ToolState, action domain.DesiredAction, maxWidth int) (string, string) {
+	splitCols := maxWidth >= 22
+	leftCol := 9
+	rightCol := maxInt(maxWidth-leftCol-3, 6)
 	partWidth := maxInt((maxWidth-3)/2, 5)
+
+	formatPair := func(left, right string) string {
+		if splitCols && displayWidth(left) <= leftCol {
+			return padDisplay(left, leftCol) + " → " + shorten(right, rightCol)
+		}
+		return shorten(left, partWidth) + " → " + shorten(right, partWidth)
+	}
+
 	if action == domain.ActionInstall {
 		if state.LatestVersion == "" && state.CheckStatus == domain.StatusChecking {
-			return "— → " + m.spinnerFrame() + " checking…", "accent"
+			return formatPair("—", m.spinnerFrame()+" checking…"), "accent"
 		}
-		return "— → " + shorten(state.LatestVersion, maxWidth-4), "accent"
+		return formatPair("—", shorten(state.LatestVersion, rightCol)), "accent"
 	}
 	if action == domain.ActionUpdate || state.IsOutdated() {
 		token := "low"
 		if action == domain.ActionUpdate {
 			token = "accent"
 		}
-		return shorten(state.InstalledVersion, partWidth) + " → " + shorten(state.LatestVersion, partWidth), token
+		return formatPair(shorten(state.InstalledVersion, leftCol), shorten(state.LatestVersion, rightCol)), token
 	}
 	if state.IsInstalled() {
 		if state.CheckStatus == domain.StatusChecking {
@@ -419,6 +441,13 @@ func (m *Model) toolVersion(state domain.ToolState, action domain.DesiredAction,
 	}
 	if state.CheckStatus == domain.StatusChecking && state.LatestVersion == "" {
 		return m.spinnerFrame() + " checking…", "muted"
+	}
+	if state.LatestVersion == "" {
+		return "—", "muted"
+	}
+	latest := shorten(state.LatestVersion, maxInt(rightCol-2, 4))
+	if splitCols {
+		return padDisplay("—", leftCol) + "   (" + latest + ")", "muted"
 	}
 	return fmt.Sprintf("— (%s)", shorten(state.LatestVersion, maxInt(maxWidth-4, 4))), "muted"
 }
@@ -435,11 +464,11 @@ func (m *Model) inspectorBlock(tool domain.Tool, width, height int) []string {
 	}
 	lines := m.inspectorBox(tool, width, detailHeight)
 	if planHeight > 1 && len(lines) < height {
-		lines = append(lines, strings.Repeat(" ", width))
+		lines = append(lines, m.blankCell(width))
 		lines = append(lines, m.planBox(width, planHeight)...)
 	}
 	for len(lines) < height {
-		lines = append(lines, strings.Repeat(" ", width))
+		lines = append(lines, m.blankCell(width))
 	}
 	if len(lines) > height {
 		lines = lines[:height]
@@ -449,7 +478,7 @@ func (m *Model) inspectorBlock(tool domain.Tool, width, height int) []string {
 
 func (m *Model) inspectorBox(tool domain.Tool, width, height int) []string {
 	if height < 2 {
-		return []string{strings.Repeat(" ", width)}
+		return []string{m.blankCell(width)}
 	}
 	state := m.states[tool.ID]
 	action := m.actions[tool.ID]
@@ -656,7 +685,7 @@ func toolCommand(tool domain.Tool, state domain.ToolState, action domain.Desired
 
 func (m *Model) boxTop(title string, width int, titleToken string) string {
 	if width < 2 {
-		return strings.Repeat(" ", maxInt(width, 0))
+		return m.blankCell(maxInt(width, 0))
 	}
 	maxTitle := width - 6
 	if maxTitle < 0 {
@@ -667,16 +696,19 @@ func (m *Model) boxTop(title string, width int, titleToken string) string {
 	if fill < 0 {
 		fill = 0
 	}
-	return m.styles.ByToken("border").Render("╭─ ") +
-		m.styles.ByToken(titleToken).Bold(true).Render(title) +
-		m.styles.ByToken("border").Render(" "+strings.Repeat("─", fill)+"╮")
+	borderStyle := m.styles.WithBackground("border", "surface")
+	titleStyle := m.styles.WithBackground(titleToken, "surface").Bold(true)
+	return borderStyle.Render("╭─ ") +
+		titleStyle.Render(title) +
+		borderStyle.Render(" "+strings.Repeat("─", fill)+"╮")
 }
 
 func (m *Model) boxBottom(width int) string {
 	if width < 2 {
-		return strings.Repeat(" ", maxInt(width, 0))
+		return m.blankCell(maxInt(width, 0))
 	}
-	return m.styles.ByToken("border").Render("╰" + strings.Repeat("─", width-2) + "╯")
+	borderStyle := m.styles.WithBackground("border", "surface")
+	return borderStyle.Render("╰" + strings.Repeat("─", width-2) + "╯")
 }
 
 func (m *Model) boxContentLine(content []span, width int) string {
@@ -684,9 +716,10 @@ func (m *Model) boxContentLine(content []span, width int) string {
 	if innerWidth < 0 {
 		innerWidth = 0
 	}
-	return m.styles.ByToken("border").Render("│") +
+	borderStyle := m.styles.WithBackground("border", "surface")
+	return borderStyle.Render("│") +
 		m.renderSpans(content, innerWidth, "surface") +
-		m.styles.ByToken("border").Render("│")
+		borderStyle.Render("│")
 }
 
 func (m *Model) composeLine(left, right []span, width int, background string) string {
@@ -712,6 +745,9 @@ func (m *Model) composeLine(left, right []span, width int, background string) st
 func (m *Model) renderSpans(spans []span, width int, background string) string {
 	if width <= 0 {
 		return ""
+	}
+	if background == "" {
+		background = "canvas"
 	}
 	var builder strings.Builder
 	used := 0
@@ -809,20 +845,20 @@ func wrapText(text string, width int) []string {
 	return lines
 }
 
-func joinScreen(lines []string, width, height int) string {
+func (m *Model) joinScreen(lines []string, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
 	result := make([]string, 0, height)
 	for index := 0; index < height; index++ {
-		line := strings.Repeat(" ", width)
+		line := m.blankCell(width)
 		if index < len(lines) {
 			line = lines[index]
 			if displayWidth(line) > width {
 				line = lipgloss.NewStyle().MaxWidth(width).Render(line)
 			}
 			if padding := width - displayWidth(line); padding > 0 {
-				line += strings.Repeat(" ", padding)
+				line += m.blankCell(padding)
 			}
 		}
 		result = append(result, line)

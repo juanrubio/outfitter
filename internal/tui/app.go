@@ -272,6 +272,16 @@ func Run(ctx context.Context, opts Options) error {
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 		return nil
 	}
+	if opts.Width <= 0 || opts.Height <= 0 {
+		if w, h, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 && h > 0 {
+			if opts.Width <= 0 {
+				opts.Width = w
+			}
+			if opts.Height <= 0 {
+				opts.Height = h
+			}
+		}
+	}
 	m, err := NewModel(opts)
 	if err != nil {
 		return err
@@ -296,6 +306,9 @@ func (m *Model) View() tea.View {
 	content := m.render()
 	view := tea.NewView(content)
 	view.AltScreen = true
+	if m.styles.CanvasColor != nil && m.mode != theme.ModeMono {
+		view.BackgroundColor = m.styles.CanvasColor
+	}
 	return view
 }
 
@@ -1322,5 +1335,5 @@ func (m *Model) render() string {
 			lines = m.renderCatalog()
 		}
 	}
-	return joinScreen(lines, m.width, m.height)
+	return m.joinScreen(lines, m.width, m.height)
 }

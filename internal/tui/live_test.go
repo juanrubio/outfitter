@@ -221,7 +221,7 @@ func TestStartupShowsRefreshProgressAndSpinner(t *testing.T) {
 	if !strings.Contains(midView, "Checking upstream versions…") || !strings.Contains(midView, "1/39 checked") {
 		t.Fatalf("mid-refresh view missing progress counter:\n%s", midView)
 	}
-	if !strings.Contains(midView, "2.1.289 → 2.1.290") {
+	if !strings.Contains(midView, "2.1.289") || !strings.Contains(midView, "→ 2.1.290") {
 		t.Fatalf("mid-refresh view did not update claude-code row incrementally:\n%s", midView)
 	}
 

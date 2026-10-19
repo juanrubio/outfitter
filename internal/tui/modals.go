@@ -101,7 +101,7 @@ func (m *Model) centerBlock(box []string, boxWidth, height int) []string {
 	for index := 0; index < height; index++ {
 		boxIndex := index - top
 		if boxIndex < 0 || boxIndex >= len(box) {
-			lines = append(lines, strings.Repeat(" ", m.width))
+			lines = append(lines, m.blankCell(m.width))
 			continue
 		}
 		line := box[boxIndex]
@@ -114,7 +114,7 @@ func (m *Model) centerBlock(box []string, boxWidth, height int) []string {
 		if right < 0 {
 			right = 0
 		}
-		lines = append(lines, strings.Repeat(" ", left)+line+strings.Repeat(" ", right))
+		lines = append(lines, m.blankCell(left)+line+m.blankCell(right))
 	}
 	return lines
 }
