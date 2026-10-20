@@ -155,6 +155,26 @@ func TestToolState(t *testing.T) {
 	}
 }
 
+func TestShadowRemovalCommand(t *testing.T) {
+	tests := []struct {
+		name       string
+		shadowedBy string
+		want       string
+	}{
+		{"system path needs sudo", "/usr/bin/dust", "sudo rm /usr/bin/dust"},
+		{"home path needs no sudo", "/home/u/.local/bin/dust", "rm /home/u/.local/bin/dust"},
+		{"empty", "", ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state := domain.ToolState{ShadowedBy: test.shadowedBy}
+			if got := state.ShadowRemovalCommand(); got != test.want {
+				t.Fatalf("ShadowRemovalCommand() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestDefaultCommands(t *testing.T) {
 	tests := []struct {
 		name    string

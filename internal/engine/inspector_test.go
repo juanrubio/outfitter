@@ -227,6 +227,90 @@ func TestInspectLocalUnmanagedSystemBinariesAreExternal(t *testing.T) {
 	}
 }
 
+func TestInspectLocalShadowedManagedInstalls(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+
+	miseJSON := strings.ReplaceAll(`{
+		"aqua:bootandy/dust": [{"version": "1.2.6", "install_path": "$HOME/.local/share/mise/installs/aqua/bootandy/dust/1.2.6", "installed": true, "active": true}],
+		"npm:@openai/codex": [{"version": "0.163.0", "install_path": "$HOME/.local/share/mise/installs/node/24/lib/node_modules/@openai/codex", "installed": true, "active": true}]
+	}`, "$HOME", home)
+
+	runner := &fakeRunner{respond: func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if filepath.Base(name) == "mise" && len(args) == 3 && args[0] == "ls" {
+			return []byte(miseJSON), nil
+		}
+		if name == "dpkg-query" && len(args) == 3 {
+			if args[2] == "tig" {
+				return []byte("2.6.0-2\n"), nil
+			}
+			return nil, errors.New("dpkg-query: package not installed")
+		}
+		switch filepath.Base(name) {
+		case "dust":
+			return []byte("Dust 1.2.4\n"), nil
+		case "tig":
+			return []byte("tig version 2.5.2\n"), nil
+		case "codex":
+			return []byte("codex 0.163.0\n"), nil
+		default:
+			return nil, fmt.Errorf("unexpected command %s %v", name, args)
+		}
+	}}
+
+	lookPath := lookPathFromMap(map[string]string{
+		"mise":  "/usr/local/bin/mise",
+		"dust":  "/usr/bin/dust",
+		"tig":   "/usr/local/bin/tig",
+		"codex": filepath.Join(home, ".local", "share", "mise", "shims", "codex"),
+	})
+
+	cat := testCatalog(
+		testTool("dust", "dust", domain.BackendMiseAqua, "bootandy/dust"),
+		testTool("tig", "tig", domain.BackendAPT, "tig"),
+		testTool("codex", "codex", domain.BackendMiseNPM, "@openai/codex"),
+	)
+
+	inspector := &Inspector{HomeDir: home, Runner: runner, LookPath: lookPath}
+	states := inspector.InspectLocal(context.Background(), cat)
+
+	dust := states["dust"]
+	if dust.InstalledVersion != "1.2.6" {
+		t.Errorf("dust: InstalledVersion = %q, want %q", dust.InstalledVersion, "1.2.6")
+	}
+	if dust.Provenance != domain.ProvenanceMise {
+		t.Errorf("dust: Provenance = %q, want %q", dust.Provenance, domain.ProvenanceMise)
+	}
+	if dust.ShadowedBy != "/usr/bin/dust" {
+		t.Errorf("dust: ShadowedBy = %q, want %q", dust.ShadowedBy, "/usr/bin/dust")
+	}
+	if dust.ShadowVersion != "1.2.4" {
+		t.Errorf("dust: ShadowVersion = %q, want %q", dust.ShadowVersion, "1.2.4")
+	}
+
+	tig := states["tig"]
+	if tig.InstalledVersion != "2.6.0" {
+		t.Errorf("tig: InstalledVersion = %q, want %q", tig.InstalledVersion, "2.6.0")
+	}
+	if tig.Provenance != domain.ProvenanceAPT {
+		t.Errorf("tig: Provenance = %q, want %q", tig.Provenance, domain.ProvenanceAPT)
+	}
+	if tig.ShadowedBy != "/usr/local/bin/tig" {
+		t.Errorf("tig: ShadowedBy = %q, want %q", tig.ShadowedBy, "/usr/local/bin/tig")
+	}
+	if tig.ShadowVersion != "2.5.2" {
+		t.Errorf("tig: ShadowVersion = %q, want %q", tig.ShadowVersion, "2.5.2")
+	}
+
+	codex := states["codex"]
+	if codex.ShadowedBy != "" {
+		t.Errorf("codex: ShadowedBy = %q, want empty", codex.ShadowedBy)
+	}
+	if codex.ShadowVersion != "" {
+		t.Errorf("codex: ShadowVersion = %q, want empty", codex.ShadowVersion)
+	}
+}
+
 func TestInspectLocalMiseSliceFormat(t *testing.T) {
 	t.Parallel()
 	runner := &fakeRunner{respond: func(_ context.Context, name string, args ...string) ([]byte, error) {

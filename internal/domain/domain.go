@@ -135,6 +135,14 @@ type ToolState struct {
 	ProvenanceDetail string      `json:"provenance_detail"`
 	CheckStatus      CheckStatus `json:"check_status"`
 	LastError        string      `json:"last_error"`
+	ShadowedBy       string      `json:"shadowed_by,omitempty"`
+	ShadowVersion    string      `json:"shadow_version,omitempty"`
+}
+
+// ShadowRemovalCommand returns the shell command that deletes the
+// shadowing binary, or "" when there is no shadow.
+func (s ToolState) ShadowRemovalCommand() string {
+	return RemovalCommand(s.ShadowedBy)
 }
 
 // IsInstalled reports whether a version was discovered on disk.

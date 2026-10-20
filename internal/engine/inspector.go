@@ -173,9 +173,11 @@ func (i *Inspector) inspectTool(
 		}
 	}
 
+	foundOnPath := false
 	if state.BinaryPath == "" {
 		if resolved, err := i.LookPath(tool.Binary); err == nil && strings.TrimSpace(resolved) != "" {
 			state.BinaryPath = resolved
+			foundOnPath = true
 		} else if i.HomeDir != "" {
 			candidate := filepath.Join(binDir, tool.Binary)
 			if info, err := i.Stat(candidate); err == nil && info.Mode().IsRegular() {
@@ -229,7 +231,32 @@ func (i *Inspector) inspectTool(
 		installedVersion = i.binaryVersion(ctx, tool, state.BinaryPath)
 	}
 	state.InstalledVersion = NormalizeVersion(installedVersion)
+	i.detectShadow(ctx, tool, &state, foundOnPath, miseManaged, resolvedPath)
 	return state
+}
+
+func (i *Inspector) detectShadow(ctx context.Context, tool domain.Tool, state *domain.ToolState, foundOnPath, miseManaged bool, resolvedPath string) {
+	if !foundOnPath || state.InstalledVersion == "" || (!miseManaged && state.Provenance != domain.ProvenanceAPT) {
+		return
+	}
+	if miseManaged {
+		binarySlash := filepath.ToSlash(state.BinaryPath)
+		resolvedSlash := filepath.ToSlash(resolvedPath)
+		if strings.Contains(binarySlash, "mise/shims/") || strings.Contains(resolvedSlash, "mise/installs/") || strings.Contains(resolvedSlash, "mise/shims/") {
+			return
+		}
+	}
+	if state.Provenance == domain.ProvenanceAPT {
+		switch filepath.Dir(state.BinaryPath) {
+		case "/usr/bin", "/bin", "/usr/sbin", "/sbin":
+			return
+		}
+	}
+	probe := NormalizeVersion(i.binaryVersion(ctx, tool, state.BinaryPath))
+	if probe != "" && probe != state.InstalledVersion {
+		state.ShadowedBy = state.BinaryPath
+		state.ShadowVersion = probe
+	}
 }
 
 func (i *Inspector) classify(

@@ -39,5 +39,30 @@ func writeStatusTable(w io.Writer, catTools []domain.Tool, states map[string]dom
 			return err
 		}
 	}
-	return table.Flush()
+	if err := table.Flush(); err != nil {
+		return err
+	}
+	shadowed := make([]domain.Tool, 0)
+	for _, tool := range catTools {
+		if states[tool.ID].ShadowedBy != "" {
+			shadowed = append(shadowed, tool)
+		}
+	}
+	if len(shadowed) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "Shadowed installs (the binary on PATH hides the managed version):"); err != nil {
+		return err
+	}
+	for _, tool := range shadowed {
+		state := states[tool.ID]
+		if _, err := fmt.Fprintf(w, "  %s: %s (%s) shadows managed %s — remove: $ %s\n",
+			tool.ID, state.ShadowedBy, state.ShadowVersion, state.InstalledVersion, state.ShadowRemovalCommand()); err != nil {
+			return err
+		}
+	}
+	return nil
 }

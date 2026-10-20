@@ -612,3 +612,30 @@ func TestExitCodeHelper(t *testing.T) {
 		t.Fatalf("usage exit code = %d", got)
 	}
 }
+
+func TestStatusWarnsAboutShadowedInstalls(t *testing.T) {
+	deps, _ := testDeps(t)
+	orig := deps.InspectLocal
+	deps.InspectLocal = func(ctx context.Context, cat *catalog.Catalog) map[string]domain.ToolState {
+		states := orig(ctx, cat)
+		states["dust"] = domain.ToolState{
+			InstalledVersion: "1.2.6",
+			LatestVersion:    "1.2.6",
+			BinaryPath:       "/usr/bin/dust",
+			Provenance:       domain.ProvenanceMise,
+			ShadowedBy:       "/usr/bin/dust",
+			ShadowVersion:    "1.2.4",
+			CheckStatus:      domain.StatusReady,
+		}
+		return states
+	}
+	out, err := runCLI(t, deps, "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Shadowed installs", "/usr/bin/dust (1.2.4) shadows managed 1.2.6", "sudo rm /usr/bin/dust"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("status output missing %q:\n%s", want, out)
+		}
+	}
+}

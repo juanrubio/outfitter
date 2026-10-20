@@ -31,11 +31,10 @@ type PlanStep struct {
 	StrayBinaryPath string `json:"stray_binary_path,omitempty"`
 }
 
-// StrayRemovalCommand returns the shell command that deletes the step's
-// stray binary, ready for the user to run after the plan completes. It
-// returns "" when the step leaves no stray binary behind.
-func (s PlanStep) StrayRemovalCommand() string {
-	path := strings.TrimSpace(s.StrayBinaryPath)
+// RemovalCommand returns the shell command that deletes the binary at
+// path, ready for the user to run. It returns "" for an empty path.
+func RemovalCommand(path string) string {
+	path = strings.TrimSpace(path)
 	if path == "" {
 		return ""
 	}
@@ -47,6 +46,13 @@ func (s PlanStep) StrayRemovalCommand() string {
 		}
 	}
 	return prefix + shellQuotePath(path)
+}
+
+// StrayRemovalCommand returns the shell command that deletes the step's
+// stray binary, ready for the user to run after the plan completes. It
+// returns "" when the step leaves no stray binary behind.
+func (s PlanStep) StrayRemovalCommand() string {
+	return RemovalCommand(s.StrayBinaryPath)
 }
 
 // shellQuotePath returns the path unchanged when it needs no quoting, or

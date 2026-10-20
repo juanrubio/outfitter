@@ -564,6 +564,13 @@ func (m *Model) inspectorBox(tool domain.Tool, width, height int) []string {
 		})
 	}
 
+	if state.ShadowedBy != "" {
+		content = append(content,
+			[]span{{text: truncateDisplay("⚠ Shadowed by "+state.ShadowedBy+" ("+state.ShadowVersion+")", innerWidth), token: "low"}},
+			[]span{{text: truncateDisplay("  remove: $ "+state.ShadowRemovalCommand(), innerWidth), token: "text"}},
+		)
+	}
+
 	commandLabel, commandText := toolCommand(tool, state, action)
 
 	reserve := 0

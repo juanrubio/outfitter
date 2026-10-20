@@ -665,3 +665,25 @@ func TestProgramEnvDowngradesKittyTerm(t *testing.T) {
 		t.Fatalf("unexpected rewrite for non-kitty terminal: %v (%v)", other, kitty)
 	}
 }
+
+func TestInspectorWarnsAboutShadowedInstall(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool, ok := m.selectedTool()
+	if !ok {
+		t.Fatal("no selected tool")
+	}
+	state := m.states[tool.ID]
+	state.ShadowedBy = "/usr/bin/" + tool.Binary
+	state.ShadowVersion = "0.0.1"
+	m.states[tool.ID] = state
+	screen := m.View().Content
+	for _, want := range []string{"Shadowed by /usr/bin/", "sudo rm /usr/bin/"} {
+		if !strings.Contains(screen, want) {
+			t.Fatalf("inspector missing %q:\n%s", want, screen)
+		}
+	}
+}
