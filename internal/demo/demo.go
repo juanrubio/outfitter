@@ -199,6 +199,9 @@ var stateSpecs = map[string]stateSpec{
 		installed: "3.3.0", latest: "3.3.0", path: "/usr/bin/htop",
 		provenance: domain.ProvenanceAPT, detail: "System package (apt)",
 	},
+	"porthole": {
+		latest: "1.3.0", provenance: domain.ProvenanceNone, detail: "Not installed",
+	},
 	"browser-use": {
 		installed: "0.12.9", latest: "0.13.1", path: "~/.local/bin/browser-use",
 		provenance: domain.ProvenanceUV,

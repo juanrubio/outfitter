@@ -18,11 +18,11 @@ func TestLoadSnapshot(t *testing.T) {
 	if snapshot.Catalog == nil {
 		t.Fatal("catalog is nil")
 	}
-	if len(snapshot.Catalog.Tools) != 47 {
-		t.Fatalf("catalog tools = %d, want 47", len(snapshot.Catalog.Tools))
+	if len(snapshot.Catalog.Tools) != 48 {
+		t.Fatalf("catalog tools = %d, want 48", len(snapshot.Catalog.Tools))
 	}
-	if len(snapshot.States) != 47 {
-		t.Fatalf("states = %d, want 47", len(snapshot.States))
+	if len(snapshot.States) != 48 {
+		t.Fatalf("states = %d, want 48", len(snapshot.States))
 	}
 	if !snapshot.MiseInstalled {
 		t.Fatal("demo mise should be installed")

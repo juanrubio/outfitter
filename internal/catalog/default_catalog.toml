@@ -35,7 +35,7 @@ tools = [
   "claude-code", "codex", "muse", "antigravity-cli", "opencode", "pi", "gemini-cli", "copilot-cli",
   "boardwalk", "trailmark", "quotary", "codexbar", "openclaw", "mercadona-cli",
   "tmux", "byobu", "hive", "herdr", "gh", "gh-dash", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
-  "zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
+  "zoxide", "eza", "bat", "dust", "broot", "tig", "htop", "porthole",
   "browser-use", "mcporter", "oracle", "summarize", "wacli", "twitter-cli", "hcloud", "aws-cli", "cloudflare-cf", "wrangler", "tailscale", "visidata",
 ]
 
@@ -48,7 +48,7 @@ tools = [
   "claude-code", "codex", "muse", "antigravity-cli", "opencode",
   "boardwalk", "trailmark", "openclaw", "mercadona-cli",
   "tmux", "byobu", "hive", "herdr", "gh", "gh-dash", "lazygit", "fzf", "delta", "ripgrep", "fd", "jq", "btop",
-  "zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
+  "zoxide", "eza", "bat", "dust", "broot", "tig", "htop", "porthole",
   "wacli", "twitter-cli", "hcloud", "aws-cli", "cloudflare-cf", "wrangler", "tailscale", "visidata",
 ]
 
@@ -623,6 +623,22 @@ update_cmd = "sudo apt-get install --only-upgrade -y htop"
 remove_cmd = "sudo apt-get remove -y htop"
 version_args = ["--version"]
 version_regex = 'htop ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "porthole"
+name = "Porthole"
+binary = "porthole"
+category = "terminal"
+backend = "mise:github"
+package = "subh05sus/porthole"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Port kill switch and service viewer for the terminal: see what is listening and stop it, project-aware."
+install_cmd = "mise use --global github:subh05sus/porthole@latest"
+update_cmd = "mise upgrade github:subh05sus/porthole"
+remove_cmd = "mise unuse --global github:subh05sus/porthole"
+version_args = ["--version"]
+version_regex = 'porthole version ([0-9]+\.[0-9]+\.[0-9]+)'
 
 # Category 4: Agent & CLI Utilities
 
