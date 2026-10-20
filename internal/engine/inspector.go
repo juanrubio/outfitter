@@ -643,8 +643,14 @@ func (i *Inspector) latestVersion(
 	switch tool.Backend {
 	case domain.BackendMiseNPM:
 		latest, err = i.npmLatest(ctx, tool.Package)
-	case domain.BackendMiseAqua, domain.BackendMiseUbi, domain.BackendMiseGitHub:
+	case domain.BackendMiseAqua, domain.BackendMiseUbi:
 		latest, err = i.githubLatest(ctx, tool.Package, token)
+	case domain.BackendMiseGitHub:
+		// Registry short names have no owner/repo fallback; mise latest
+		// above is their only upstream source.
+		if _, _, ok := githubRepo(tool.Package); ok {
+			latest, err = i.githubLatest(ctx, tool.Package, token)
+		}
 	case domain.BackendUV:
 		latest, err = i.pypiLatest(ctx, tool.Package)
 	case domain.BackendAPT:
@@ -682,6 +688,12 @@ func miseSpec(tool domain.Tool) string {
 	case domain.BackendMiseUbi:
 		return "ubi:" + pkg
 	case domain.BackendMiseGitHub:
+		// A package without a slash is a mise registry short name: the
+		// registry carries per-platform options (e.g. broot's bin_path
+		// template) that a full github: spec cannot express.
+		if !strings.Contains(pkg, "/") {
+			return pkg
+		}
 		return "github:" + pkg
 	case domain.BackendMiseNPM:
 		return "npm:" + pkg

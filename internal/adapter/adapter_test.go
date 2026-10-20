@@ -106,6 +106,24 @@ func TestMiseCommandsAcrossBackendsAndActions(t *testing.T) {
 			commands: []string{"mise use --global github:jdx/mise@latest"},
 		},
 		{
+			name: "github registry short name install",
+			tool: domain.Tool{
+				ID: "broot", Binary: "broot", Backend: domain.BackendMiseGitHub,
+				Package: "broot",
+			},
+			action:   domain.ActionInstall,
+			commands: []string{"mise use --global broot@latest"},
+		},
+		{
+			name: "github registry short name update",
+			tool: domain.Tool{
+				ID: "broot", Binary: "broot", Backend: domain.BackendMiseGitHub,
+				Package: "broot",
+			},
+			action:   domain.ActionUpdate,
+			commands: []string{"mise upgrade broot"},
+		},
+		{
 			name: "npm install prepends node lts",
 			tool: domain.Tool{
 				ID: "codex", Binary: "codex", Backend: domain.BackendMiseNPM,

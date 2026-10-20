@@ -311,6 +311,12 @@ func miseSpec(t Tool) string {
 	case BackendMiseUbi:
 		return "ubi:" + pkg
 	case BackendMiseGitHub:
+		// A package without a slash is a mise registry short name: the
+		// registry carries per-platform options (e.g. broot's bin_path
+		// template) that a full github: spec cannot express.
+		if !strings.Contains(pkg, "/") {
+			return pkg
+		}
 		return "github:" + pkg
 	case BackendMiseNPM:
 		return "npm:" + pkg

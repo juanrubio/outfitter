@@ -601,6 +601,46 @@ func TestInspectUpstreamRegistryFallbacks(t *testing.T) {
 		}
 	})
 
+	t.Run("mise registry short name", func(t *testing.T) {
+		t.Parallel()
+		runner := &fakeRunner{respond: func(_ context.Context, name string, args ...string) ([]byte, error) {
+			if name == "/usr/local/bin/mise" && len(args) == 2 && args[0] == "latest" && args[1] == "broot" {
+				return []byte("1.61.0\n"), nil
+			}
+			return nil, errors.New("unexpected command")
+		}}
+		cat := testCatalog(testTool("broot", "broot", domain.BackendMiseGitHub, "broot"))
+		inspector := &Inspector{
+			HomeDir:  t.TempDir(),
+			Runner:   runner,
+			LookPath: lookPathFromMap(map[string]string{"mise": "/usr/local/bin/mise"}),
+		}
+		state := inspector.InspectUpstream(context.Background(), cat, nil, nil)["broot"]
+		if state.LatestVersion != "1.61.0" || state.CheckStatus != domain.StatusReady {
+			t.Fatalf("state = %+v", state)
+		}
+		if !runner.called("/usr/local/bin/mise", "latest", "broot") {
+			t.Fatalf("mise latest not called with the short name: %v", runner.callsSnapshot())
+		}
+	})
+
+	t.Run("mise registry short name without mise keeps known state", func(t *testing.T) {
+		t.Parallel()
+		cat := testCatalog(testTool("broot", "broot", domain.BackendMiseGitHub, "broot"))
+		inspector := &Inspector{
+			HomeDir:  t.TempDir(),
+			Runner:   &fakeRunner{},
+			LookPath: lookPathFromMap(nil),
+		}
+		current := map[string]domain.ToolState{
+			"broot": {InstalledVersion: "1.61.0"},
+		}
+		state := inspector.InspectUpstream(context.Background(), cat, current, nil)["broot"]
+		if state.LatestVersion != "1.61.0" || state.CheckStatus != domain.StatusReady || state.LastError != "" {
+			t.Fatalf("state = %+v, want ready with installed version kept", state)
+		}
+	})
+
 	t.Run("mise latest falls back to registry", func(t *testing.T) {
 		t.Parallel()
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -562,13 +562,17 @@ name = "broot"
 binary = "broot"
 category = "terminal"
 backend = "mise:github"
-package = "Canop/broot"
+# Bare registry short name: broot ships one multi-platform zip and only
+# the mise registry entry carries the per-platform bin_path template
+# that selects the right binary inside it. A full github: spec cannot
+# express that template, and ubi picks the macOS binary.
+package = "broot"
 sudo = false
 profiles = ["desktop", "server"]
 description = "Interactive directory tree navigator and fuzzy file manager."
-install_cmd = "mise use --global github:Canop/broot@latest"
-update_cmd = "mise upgrade github:Canop/broot"
-remove_cmd = "mise unuse --global github:Canop/broot"
+install_cmd = "mise use --global broot@latest"
+update_cmd = "mise upgrade broot"
+remove_cmd = "mise unuse --global broot"
 version_args = ["--version"]
 version_regex = 'broot ([0-9]+\.[0-9]+\.[0-9]+)'
 
