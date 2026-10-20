@@ -447,7 +447,7 @@ func TestDiscoveredRemovalCommandFlowsToPlan(t *testing.T) {
 		InstalledVersion: "1.0.91", LatestVersion: "1.0.98",
 		BinaryPath:     "/home/u/.nvm/versions/node/v24/bin/copilot",
 		Provenance:     domain.ProvenanceExternal,
-		RemovalCommand: "/home/u/.nvm/versions/node/v24/bin/npm uninstall -g @github/copilot",
+		RemovalCommand: "/home/u/.nvm/versions/node/v24/bin/npm uninstall -g --prefix /home/u/.nvm/versions/node/v24 @github/copilot",
 	}
 	states := map[string]domain.ToolState{tool.ID: state}
 

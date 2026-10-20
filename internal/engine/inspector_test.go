@@ -327,7 +327,7 @@ func TestInspectLocalShadowedManagedInstalls(t *testing.T) {
 	if copilot.ShadowVersion != "1.0.91" {
 		t.Errorf("copilot: ShadowVersion = %q, want %q", copilot.ShadowVersion, "1.0.91")
 	}
-	wantRemoval := copilotNPM + " uninstall -g @github/copilot"
+	wantRemoval := copilotNPM + " uninstall -g --prefix " + filepath.Dir(filepath.Dir(copilotNPM)) + " @github/copilot"
 	if copilot.RemovalCommand != wantRemoval {
 		t.Errorf("copilot: RemovalCommand = %q, want %q", copilot.RemovalCommand, wantRemoval)
 	}

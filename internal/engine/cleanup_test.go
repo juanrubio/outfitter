@@ -35,7 +35,10 @@ func TestRemovalCommandForNPMGlobal(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := removalCommandFor(binPath, resolved, os.Stat)
-	want := npmPath + " uninstall -g @github/copilot"
+	// The prefix must be pinned: an npm shim derives its global prefix
+	// from whichever node the environment resolves, and silently
+	// uninstalls from the wrong tree (exit 0, "up to date") otherwise.
+	want := npmPath + " uninstall -g --prefix " + dir + " @github/copilot"
 	if got != want {
 		t.Errorf("removalCommandFor(scoped) = %q, want %q", got, want)
 	}
@@ -115,10 +118,11 @@ func TestRemoveShadowedBinaries(t *testing.T) {
 
 		dir := t.TempDir()
 		binPath, npmPath := npmCopilotFixture(t, dir)
-		var gotNPM, gotPkg string
-		npmUninstallFile = func(npm, pkg string) error {
-			gotNPM, gotPkg = npm, pkg
-			return nil
+		var gotNPM, gotPrefix, gotPkg string
+		npmUninstallFile = func(npm, prefix, pkg string) error {
+			gotNPM, gotPrefix, gotPkg = npm, prefix, pkg
+			// Simulate a real uninstall: the bin symlink disappears.
+			return os.Remove(binPath)
 		}
 
 		removed, err := RemoveShadowedBinaries([]string{binPath})
@@ -128,8 +132,31 @@ func TestRemoveShadowedBinaries(t *testing.T) {
 		if len(removed) != 1 || removed[0] != binPath {
 			t.Fatalf("removed = %v, want [%s]", removed, binPath)
 		}
-		if gotNPM != npmPath || gotPkg != "@github/copilot" {
-			t.Fatalf("npm uninstall called with (%q, %q), want (%q, @github/copilot)", gotNPM, gotPkg, npmPath)
+		if gotNPM != npmPath || gotPrefix != dir || gotPkg != "@github/copilot" {
+			t.Fatalf("npm uninstall called with (%q, %q, %q), want (%q, %q, @github/copilot)",
+				gotNPM, gotPrefix, gotPkg, npmPath, dir)
+		}
+	})
+
+	t.Run("npm silent no-op falls back to direct removal", func(t *testing.T) {
+		originalNPM := npmUninstallFile
+		t.Cleanup(func() { npmUninstallFile = originalNPM })
+
+		dir := t.TempDir()
+		binPath, _ := npmCopilotFixture(t, dir)
+		// npm exits 0 ("up to date") but the binary is still there:
+		// trust the filesystem, not the exit code.
+		npmUninstallFile = func(string, string, string) error { return nil }
+
+		removed, err := RemoveShadowedBinaries([]string{binPath})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(removed) != 1 || removed[0] != binPath {
+			t.Fatalf("removed = %v, want [%s]", removed, binPath)
+		}
+		if _, err := os.Lstat(binPath); !os.IsNotExist(err) {
+			t.Fatalf("symlink still exists after no-op npm (stat err = %v)", err)
 		}
 	})
 
@@ -139,7 +166,7 @@ func TestRemoveShadowedBinaries(t *testing.T) {
 
 		dir := t.TempDir()
 		binPath, _ := npmCopilotFixture(t, dir)
-		npmUninstallFile = func(string, string) error { return errors.New("npm failed") }
+		npmUninstallFile = func(string, string, string) error { return errors.New("npm failed") }
 
 		removed, err := RemoveShadowedBinaries([]string{binPath})
 		if err != nil {
