@@ -79,11 +79,14 @@ func InstallCodexBar(ctx context.Context, opts CodexBarOptions, onLine func(stri
 	}
 
 	archiveURL := strings.TrimSpace(opts.ArchiveURL)
+	version := ""
 	if archiveURL == "" {
-		archiveURL, err = resolveCodexBarArchiveURL(ctx, opts)
+		archiveURL, version, err = resolveCodexBarArchiveURL(ctx, opts)
 		if err != nil {
 			return err
 		}
+	} else if v := strings.TrimSpace(opts.Version); v != "" && !strings.EqualFold(v, "latest") {
+		version = normalizeCodexBarVersion(v)
 	}
 
 	emitLine(onLine, "Downloading CodexBar release from "+archiveURL)
@@ -118,6 +121,13 @@ func InstallCodexBar(ctx context.Context, opts CodexBarOptions, onLine func(stri
 	targetBinary := filepath.Join(targetDir, binaryName)
 	if err := os.Chmod(filepath.Join(stageDir, binaryName), 0o755); err != nil {
 		return fmt.Errorf("set CodexBar executable permissions: %w", err)
+	}
+	// CodexBarCLI cannot report its own version (`--version` prints only
+	// its name), so record the resolved release version for discovery.
+	if version != "" {
+		if err := os.WriteFile(filepath.Join(stageDir, "VERSION"), []byte(version+"\n"), 0o644); err != nil {
+			return fmt.Errorf("write CodexBar VERSION sidecar: %w", err)
+		}
 	}
 	if err := os.RemoveAll(targetDir); err != nil {
 		return fmt.Errorf("replace CodexBar installation: %w", err)
@@ -174,7 +184,7 @@ type codexBarRelease struct {
 	} `json:"assets"`
 }
 
-func resolveCodexBarArchiveURL(ctx context.Context, opts CodexBarOptions) (string, error) {
+func resolveCodexBarArchiveURL(ctx context.Context, opts CodexBarOptions) (string, string, error) {
 	endpoint := opts.GitHubAPIBaseURL + "/repos/" + codexBarRepository + "/releases/latest"
 	version := strings.TrimSpace(opts.Version)
 	if version != "" && !strings.EqualFold(version, "latest") {
@@ -184,28 +194,28 @@ func resolveCodexBarArchiveURL(ctx context.Context, opts CodexBarOptions) (strin
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
-		return "", fmt.Errorf("build CodexBar release request: %w", err)
+		return "", "", fmt.Errorf("build CodexBar release request: %w", err)
 	}
 	req.Header.Set("User-Agent", "outfitter")
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := opts.HTTPClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("request CodexBar release: %w", err)
+		return "", "", fmt.Errorf("request CodexBar release: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return "", fmt.Errorf("request CodexBar release: unexpected status %s", resp.Status)
+		return "", "", fmt.Errorf("request CodexBar release: unexpected status %s", resp.Status)
 	}
 
 	var release codexBarRelease
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&release); err != nil {
-		return "", fmt.Errorf("decode CodexBar release: %w", err)
+		return "", "", fmt.Errorf("decode CodexBar release: %w", err)
 	}
 	if chosen, ok := selectCodexBarAsset(release, opts.Arch); ok {
-		return chosen, nil
+		return chosen, normalizeCodexBarVersion(release.TagName), nil
 	}
-	return "", errors.New("CodexBar release has no matching Linux .tar.gz asset")
+	return "", "", errors.New("CodexBar release has no matching Linux .tar.gz asset")
 }
 
 func selectCodexBarAsset(release codexBarRelease, arch string) (string, bool) {
@@ -422,6 +432,12 @@ func codexBarBundleEntry(clean string) (relative string, executable bool) {
 		}
 	}
 	return "", false
+}
+
+// normalizeCodexBarVersion reduces a release tag like "v0.78.0" to the
+// bare version recorded in the VERSION sidecar.
+func normalizeCodexBarVersion(version string) string {
+	return strings.TrimPrefix(strings.TrimSpace(version), "v")
 }
 
 func emitLine(onLine func(string), line string) {

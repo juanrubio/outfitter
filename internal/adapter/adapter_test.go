@@ -657,6 +657,13 @@ func TestInstallCodexBarResolvesGitHubReleaseAsset(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".local", "bin", "codexbar")); err != nil {
 		t.Fatalf("codexbar symlink missing: %v", err)
 	}
+	version, err := os.ReadFile(filepath.Join(home, ".local", "share", "outfitter", "codexbar", "VERSION"))
+	if err != nil {
+		t.Fatalf("codexbar VERSION sidecar missing: %v", err)
+	}
+	if string(version) != "0.77.0\n" {
+		t.Fatalf("VERSION sidecar = %q, want %q", version, "0.77.0\n")
+	}
 }
 
 func TestCodexBarRejectsUnsafeArchivePaths(t *testing.T) {

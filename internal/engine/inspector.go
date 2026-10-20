@@ -206,6 +206,11 @@ func (i *Inspector) inspectTool(
 			installedVersion = version
 		}
 	}
+	if tool.Binary == "codexbar" && tool.Backend == domain.BackendVendor {
+		if version := i.readCodexBarVersion(); version != "" {
+			installedVersion = version
+		}
+	}
 
 	resolvedPath := i.resolveSymlink(state.BinaryPath)
 	provenance, detail := i.classify(tool, state.BinaryPath, resolvedPath, miseManaged, museInstall)
@@ -318,6 +323,22 @@ func (i *Inspector) readMuseVersion() string {
 			return NormalizeVersion(findVersionString(payload))
 		}
 	}
+	if line, _, ok := strings.Cut(content, "\n"); ok {
+		content = line
+	}
+	return NormalizeVersion(content)
+}
+
+// readCodexBarVersion returns the version recorded by the CodexBar
+// bundle installer. CodexBarCLI's own --version prints only its name,
+// so the sidecar is the sole local version source.
+func (i *Inspector) readCodexBarVersion() string {
+	path := filepath.Join(i.HomeDir, ".local", "share", "outfitter", "codexbar", "VERSION")
+	data, err := i.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	content := strings.TrimSpace(string(data))
 	if line, _, ok := strings.Cut(content, "\n"); ok {
 		content = line
 	}

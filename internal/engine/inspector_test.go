@@ -363,6 +363,46 @@ func TestLookupMiseDoesNotCrossMatchUbiAndGitHub(t *testing.T) {
 	}
 }
 
+// TestInspectLocalCodexBarSidecarVersion covers tools whose binary
+// cannot report its own version (CodexBarCLI prints only its name):
+// discovery falls back to the VERSION sidecar the installer records in
+// the bundle directory.
+func TestInspectLocalCodexBarSidecarVersion(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+
+	bundleDir := filepath.Join(home, ".local", "share", "outfitter", "codexbar")
+	bundleBinary := filepath.Join(bundleDir, "CodexBarCLI")
+	writeTestFile(t, bundleBinary, "binary", 0o755)
+	writeTestFile(t, filepath.Join(bundleDir, "VERSION"), "0.78.0\n", 0o644)
+	linkPath := filepath.Join(home, ".local", "bin", "codexbar")
+	symlinkOrFatal(t, bundleBinary, linkPath)
+
+	runner := &fakeRunner{respond: func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if filepath.Base(name) == "mise" && len(args) == 3 && args[0] == "ls" {
+			return []byte(`{}`), nil
+		}
+		if filepath.Base(name) == "codexbar" || name == linkPath {
+			return []byte("CodexBar\n"), nil
+		}
+		return nil, fmt.Errorf("unexpected command %s %v", name, args)
+	}}
+	lookPath := lookPathFromMap(map[string]string{
+		"mise":     "/usr/local/bin/mise",
+		"codexbar": linkPath,
+	})
+	cat := testCatalog(testTool("codexbar", "codexbar", domain.BackendVendor, "steipete/CodexBar"))
+
+	inspector := &Inspector{HomeDir: home, Runner: runner, LookPath: lookPath}
+	state := inspector.InspectLocal(context.Background(), cat)["codexbar"]
+	if state.InstalledVersion != "0.78.0" {
+		t.Fatalf("InstalledVersion = %q, want 0.78.0 from VERSION sidecar (state %+v)", state.InstalledVersion, state)
+	}
+	if state.Provenance != domain.ProvenanceVendor {
+		t.Errorf("Provenance = %q, want vendor", state.Provenance)
+	}
+}
+
 func TestInspectLocalMiseSliceFormat(t *testing.T) {
 	t.Parallel()
 	runner := &fakeRunner{respond: func(_ context.Context, name string, args ...string) ([]byte, error) {
