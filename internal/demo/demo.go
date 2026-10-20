@@ -116,6 +116,9 @@ var stateSpecs = map[string]stateSpec{
 		installed: "0.1.2", latest: "0.1.2", path: "/usr/local/bin/hive",
 		provenance: domain.ProvenanceExternal, detail: "External binary (/usr/local/bin/hive)",
 	},
+	"herdr": {
+		latest: "0.9.5", provenance: domain.ProvenanceNone, detail: "Not installed",
+	},
 	"gh": {
 		installed: "2.61.0", latest: "2.61.0", path: "/usr/bin/gh",
 		provenance: domain.ProvenanceAPT, detail: "System package (GitHub official APT repo)",
@@ -230,6 +233,9 @@ var stateSpecs = map[string]stateSpec{
 		installed: "1.50.0", latest: "1.50.0", path: "~/.local/bin/hcloud",
 		provenance: domain.ProvenanceMise,
 		detail:     "Managed by mise (aqua:hetznercloud/cli)",
+	},
+	"aws-cli": {
+		latest: "2.38.1", provenance: domain.ProvenanceNone, detail: "Not installed",
 	},
 	"cloudflare-cf": {
 		latest: "0.15.0", provenance: domain.ProvenanceNone,
