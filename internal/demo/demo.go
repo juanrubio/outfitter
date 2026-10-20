@@ -120,6 +120,11 @@ var stateSpecs = map[string]stateSpec{
 		installed: "2.61.0", latest: "2.61.0", path: "/usr/bin/gh",
 		provenance: domain.ProvenanceAPT, detail: "System package (GitHub official APT repo)",
 	},
+	"gh-dash": {
+		installed: "4.26.2", latest: "4.26.2", path: "~/.local/share/mise/shims/gh-dash",
+		provenance: domain.ProvenanceMise,
+		detail:     "Managed by mise (aqua:dlvhdr/gh-dash)",
+	},
 	"lazygit": {
 		installed: "0.44.0", latest: "0.45.1", path: "~/.local/bin/lazygit",
 		provenance: domain.ProvenanceMise,

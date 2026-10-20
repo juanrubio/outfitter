@@ -34,7 +34,7 @@ description = "Complete workstation rig: all coding harnesses, AI TUIs, terminal
 tools = [
   "claude-code", "codex", "muse", "antigravity-cli", "opencode", "pi", "gemini-cli", "copilot-cli",
   "boardwalk", "trailmark", "quotary", "codexbar", "openclaw", "mercadona-cli",
-  "tmux", "byobu", "hive", "gh", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
+  "tmux", "byobu", "hive", "gh", "gh-dash", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
   "zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
   "browser-use", "mcporter", "oracle", "summarize", "wacli", "hcloud", "visidata",
 ]
@@ -47,7 +47,7 @@ description = "Tuned for Ubuntu home servers & Hetzner VPS agent workers (no des
 tools = [
   "claude-code", "codex", "muse", "antigravity-cli", "opencode",
   "boardwalk", "trailmark", "openclaw", "mercadona-cli",
-  "tmux", "byobu", "hive", "gh", "lazygit", "fzf", "delta", "ripgrep", "fd", "jq", "btop",
+  "tmux", "byobu", "hive", "gh", "gh-dash", "lazygit", "fzf", "delta", "ripgrep", "fd", "jq", "btop",
   "zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
   "wacli", "hcloud", "visidata",
 ]
@@ -347,6 +347,22 @@ update_cmd = "sudo apt-get install --only-upgrade -y gh"
 remove_cmd = "sudo apt-get remove -y gh"
 version_args = ["--version"]
 version_regex = 'gh version ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "gh-dash"
+name = "gh-dash"
+binary = "gh-dash"
+category = "terminal"
+backend = "mise:aqua"
+package = "dlvhdr/gh-dash"
+sudo = false
+profiles = ["desktop", "server"]
+description = "GitHub dashboard TUI for pull requests and issues, built as a GitHub CLI companion."
+install_cmd = "mise use --global aqua:dlvhdr/gh-dash@latest"
+update_cmd = "mise upgrade aqua:dlvhdr/gh-dash"
+remove_cmd = "mise unuse --global aqua:dlvhdr/gh-dash"
+version_args = ["--version"]
+version_regex = 'module version: v([0-9]+\.[0-9]+\.[0-9]+)'
 
 [[tools]]
 id = "lazygit"
