@@ -172,6 +172,8 @@ When launched on a fresh Debian/Ubuntu machine where `~/.local/bin/mise` is not 
 | `f` | Global | Cycle view filter: `All` → `Installed` → `Outdated` → `Pending Changes` → `Not Installed` |
 | `/` | Global | Incremental search by tool name, binary, backend, or description (`Esc` clears) |
 | `r` | Global | Refresh installed states and upstream version checks |
+| `B` | Global | Fix mise shell integration (confirmed; appends the marked `mise activate` block to the shell rc) |
+| `S` | Global | Remove all shadowed binaries (confirmed; status bar shows `⚠ N shadowed` while any exist; sudo pre-flight for system paths) |
 | `c` | Global | View Catalog sources (`Embedded default` + `~/.config/outfitter/catalog.toml`) |
 | `Enter` | Compact / Plan | Open tool detail card (in `80×24` mode) or confirm Apply (in Plan modal) |
 | `?` | Global | Toggle keyboard help overlay |

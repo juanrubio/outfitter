@@ -597,6 +597,86 @@ func TestShellWarningHeaderAndFix(t *testing.T) {
 	}
 }
 
+// TestShadowSweepHeaderAndKey verifies the shadowed count in the status
+// bar and the confirmed [S] sweep, including the sudo pre-flight detour.
+func TestShadowSweepHeaderAndKey(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	var swept []string
+	m, err := NewModel(Options{
+		Demo: true, Width: 120, Height: 40,
+		OnRemoveShadows: func(paths []string) ([]string, error) {
+			swept = append([]string(nil), paths...)
+			return paths, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, shadow := range map[string]string{
+		"tmux": "/home/test/old/tmux",
+		"dust": "/home/test/old/dust",
+	} {
+		state := m.states[id]
+		state.ShadowedBy = shadow
+		state.ShadowVersion = "0.0.1"
+		m.states[id] = state
+	}
+
+	if !strings.Contains(m.View().Content, "⚠ 2 shadowed") {
+		t.Fatalf("status bar missing shadowed count:\n%s", m.View().Content)
+	}
+
+	// Cancel keeps everything.
+	pressKey(m, 'S', "S")
+	if !m.confirmShadowSweep {
+		t.Fatal("S should ask for confirmation")
+	}
+	pressKey(m, 'n', "n")
+	if len(swept) != 0 {
+		t.Fatal("cancelled sweep must not run")
+	}
+
+	// Confirm sweeps (home paths need no sudo) and clears the count.
+	pressKey(m, 'S', "S")
+	pressKey(m, 'y', "y")
+	if len(swept) != 2 {
+		t.Fatalf("swept = %v, want 2 paths", swept)
+	}
+	if !strings.Contains(m.notice, "Removed 2 shadowed") {
+		t.Fatalf("notice = %q, want removal summary", m.notice)
+	}
+	if strings.Contains(m.View().Content, "⚠ 2 shadowed") {
+		t.Fatal("shadowed count still rendered after sweep")
+	}
+	for id := range map[string]string{"tmux": "", "dust": ""} {
+		if m.states[id].ShadowedBy != "" {
+			t.Errorf("%s shadow not cleared: %q", id, m.states[id].ShadowedBy)
+		}
+	}
+
+	// A system path detours through the sudo pre-flight first.
+	state := m.states["tig"]
+	state.ShadowedBy = "/usr/local/bin/tig"
+	state.ShadowVersion = "2.5.2"
+	m.states["tig"] = state
+	swept = nil
+	pressKey(m, 'S', "S")
+	cmd := pressKey(m, 'y', "y")
+	if cmd == nil {
+		t.Fatal("sudo-needed sweep should return the pre-flight command")
+	}
+	if len(swept) != 0 {
+		t.Fatal("sweep ran before sudo verification")
+	}
+	if !m.pendingShadowSweep {
+		t.Fatal("pendingShadowSweep should be set while sudo verifies")
+	}
+	m.Update(shadowSudoVerifiedMsg{})
+	if len(swept) != 1 || swept[0] != "/usr/local/bin/tig" {
+		t.Fatalf("swept after sudo = %v, want [/usr/local/bin/tig]", swept)
+	}
+}
+
 func TestPlanEmptyStateAndHelp(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	m, err := NewModel(Options{Demo: true, Width: 80, Height: 24})

@@ -96,6 +96,10 @@ type sudoVerifiedMsg struct {
 	err error
 }
 
+type shadowSudoVerifiedMsg struct {
+	err error
+}
+
 // Options configures a TUI session. Tests may supply a catalog and state
 // directly and render the model without a real terminal. In live mode,
 // OnRefresh and OnExecute replace the default engine Inspector and Runner.
@@ -120,6 +124,9 @@ type Options struct {
 	// OnFixShell applies the mise shell-integration fix and returns a
 	// human-readable result line. Live launches install a default.
 	OnFixShell func() (string, error)
+	// OnRemoveShadows deletes shadowed binaries and returns the paths
+	// that are gone. Live launches install a default.
+	OnRemoveShadows func(paths []string) (removed []string, err error)
 }
 
 // Model is the Bubble Tea model for the catalog and inspector layouts.
@@ -137,22 +144,25 @@ type Model struct {
 	mode   theme.Mode
 	styles theme.Styles
 
-	selected        string
-	collapsed       map[string]bool
-	view            string
-	scrollOffset    int
-	plan            domain.ActionPlan
-	notice          string
-	filter          filterMode
-	query           string
-	editing         bool
-	confirmQuit     bool
-	confirmShellFix bool
-	shellWarning    string
-	onFixShell      func() (string, error)
-	activeProfileID string
-	profileCursor   int
-	execSteps       []executionStep
+	selected           string
+	collapsed          map[string]bool
+	view               string
+	scrollOffset       int
+	plan               domain.ActionPlan
+	notice             string
+	filter             filterMode
+	query              string
+	editing            bool
+	confirmQuit        bool
+	confirmShellFix    bool
+	shellWarning       string
+	onFixShell         func() (string, error)
+	confirmShadowSweep bool
+	pendingShadowSweep bool
+	onRemoveShadows    func(paths []string) (removed []string, err error)
+	activeProfileID    string
+	profileCursor      int
+	execSteps          []executionStep
 
 	baseCtx        context.Context
 	autoRefresh    bool
@@ -203,6 +213,7 @@ func NewModel(opts Options) (*Model, error) {
 		onExecute:       opts.OnExecute,
 		shellWarning:    opts.ShellWarning,
 		onFixShell:      opts.OnFixShell,
+		onRemoveShadows: opts.OnRemoveShadows,
 	}
 
 	if opts.Demo {
@@ -257,6 +268,9 @@ func NewModel(opts Options) (*Model, error) {
 	}
 	if m.actions == nil {
 		m.actions = make(map[string]domain.DesiredAction)
+	}
+	if !opts.Demo && m.autoRefresh && m.onRefresh == nil && m.onRemoveShadows == nil {
+		m.onRemoveShadows = engine.RemoveShadowedBinaries
 	}
 	if !opts.Demo && m.autoRefresh && m.onRefresh == nil && m.miseInstalled && m.shellWarning == "" {
 		setup := &engine.ShellSetup{}
@@ -413,6 +427,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, spinnerTickCmd()
 	case sudoVerifiedMsg:
 		return m.handleSudoVerified(msg)
+	case shadowSudoVerifiedMsg:
+		return m.handleShadowSudoVerified(msg)
 	case tea.KeyPressMsg:
 		return m.updateKey(msg)
 	default:
@@ -447,6 +463,14 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.notice = "Shell fix cancelled"
 		}
+		return m, nil
+	}
+	if m.confirmShadowSweep {
+		m.confirmShadowSweep = false
+		if keystroke == "y" {
+			return m.beginShadowSweep()
+		}
+		m.notice = "Shadow sweep cancelled"
 		return m, nil
 	}
 
@@ -535,6 +559,18 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.confirmShellFix = true
 			m.notice = "Add mise activation to your shell rc file? Press y to confirm, any other key to cancel."
+		}
+	case "S":
+		paths := m.shadowedPaths()
+		if len(paths) == 0 {
+			m.notice = "No shadowed binaries"
+		} else {
+			m.confirmShadowSweep = true
+			noun := "binaries"
+			if len(paths) == 1 {
+				noun = "binary"
+			}
+			m.notice = fmt.Sprintf("Remove %d shadowed %s? sudo may prompt. Press y to confirm, any other key to cancel.", len(paths), noun)
 		}
 	case "t":
 		m.cycleTheme()
@@ -880,6 +916,81 @@ func (m *Model) cycleFilter() {
 	m.filter = order[(index+1)%len(order)]
 	m.scrollOffset = 0
 	m.ensureSelection()
+}
+
+// shadowedPaths returns the shadow binary paths in catalog order.
+func (m *Model) shadowedPaths() []string {
+	var paths []string
+	for _, tool := range m.catalog.Tools {
+		if state := m.states[tool.ID]; state.ShadowedBy != "" {
+			paths = append(paths, state.ShadowedBy)
+		}
+	}
+	return paths
+}
+
+// beginShadowSweep runs the confirmed sweep, detouring through the sudo
+// pre-flight when any shadow lives in a system directory.
+func (m *Model) beginShadowSweep() (tea.Model, tea.Cmd) {
+	for _, path := range m.shadowedPaths() {
+		if domain.RemovalNeedsSudo(path) {
+			m.pendingShadowSweep = true
+			m.notice = "Verifying sudo credentials before removing shadowed binaries…"
+			return m, tea.ExecProcess(adapter.VerifySudoCommand(), func(err error) tea.Msg {
+				return shadowSudoVerifiedMsg{err: err}
+			})
+		}
+	}
+	m.runShadowSweep()
+	return m, nil
+}
+
+func (m *Model) handleShadowSudoVerified(msg shadowSudoVerifiedMsg) (tea.Model, tea.Cmd) {
+	if !m.pendingShadowSweep {
+		return m, nil
+	}
+	m.pendingShadowSweep = false
+	if msg.err != nil {
+		m.notice = "sudo verification failed: " + msg.err.Error()
+		return m, nil
+	}
+	m.runShadowSweep()
+	return m, nil
+}
+
+// runShadowSweep deletes every shadowed binary via the configured
+// remover and clears the shadow markers for the paths that are gone.
+func (m *Model) runShadowSweep() {
+	paths := m.shadowedPaths()
+	if len(paths) == 0 {
+		m.notice = "No shadowed binaries"
+		return
+	}
+	if m.onRemoveShadows == nil {
+		m.notice = "Remove manually: $ " + domain.RemovalCommand(paths[0])
+		return
+	}
+	removed, err := m.onRemoveShadows(paths)
+	gone := make(map[string]bool, len(removed))
+	for _, path := range removed {
+		gone[path] = true
+	}
+	for id, state := range m.states {
+		if gone[state.ShadowedBy] {
+			state.ShadowedBy = ""
+			state.ShadowVersion = ""
+			m.states[id] = state
+		}
+	}
+	if err != nil {
+		m.notice = fmt.Sprintf("Removed %d of %d shadowed binaries; %v", len(removed), len(paths), err)
+		return
+	}
+	noun := "binaries"
+	if len(removed) == 1 {
+		noun = "binary"
+	}
+	m.notice = fmt.Sprintf("Removed %d shadowed %s", len(removed), noun)
 }
 
 // applyShellFix runs the confirmed shell-integration fix and clears the

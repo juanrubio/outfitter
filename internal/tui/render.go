@@ -164,6 +164,10 @@ func (m *Model) headerLines(barTitle string) []string {
 	if pending == 0 {
 		summary = fmt.Sprintf("%d/%d installed · %d outdated · Plan: clean", installed, total, outdated)
 	}
+	shadowed := len(m.shadowedPaths())
+	if shadowed > 0 {
+		summary += fmt.Sprintf(" · ⚠ %d shadowed [S]", shadowed)
+	}
 
 	profileName := "Full Desktop"
 	if profile, ok := m.catalog.ProfileByID(m.activeProfileID); ok {
@@ -196,6 +200,8 @@ func (m *Model) headerLines(barTitle string) []string {
 	summaryToken := "muted"
 	if pending > 0 {
 		summaryToken = "accent"
+	} else if shadowed > 0 {
+		summaryToken = "low"
 	}
 	lines := []string{
 		m.composeLine(headerLeft, []span{{text: summary, token: summaryToken, bold: pending > 0}}, m.width),

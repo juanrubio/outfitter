@@ -31,6 +31,17 @@ type PlanStep struct {
 	StrayBinaryPath string `json:"stray_binary_path,omitempty"`
 }
 
+// RemovalNeedsSudo reports whether deleting path requires elevated
+// privileges because it lives in a system-owned directory.
+func RemovalNeedsSudo(path string) bool {
+	for _, systemPrefix := range []string{"/usr/", "/bin/", "/sbin/", "/opt/"} {
+		if strings.HasPrefix(path, systemPrefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // RemovalCommand returns the shell command that deletes the binary at
 // path, ready for the user to run. It returns "" for an empty path.
 func RemovalCommand(path string) string {
@@ -39,11 +50,8 @@ func RemovalCommand(path string) string {
 		return ""
 	}
 	prefix := "rm "
-	for _, systemPrefix := range []string{"/usr/", "/bin/", "/sbin/", "/opt/"} {
-		if strings.HasPrefix(path, systemPrefix) {
-			prefix = "sudo rm "
-			break
-		}
+	if RemovalNeedsSudo(path) {
+		prefix = "sudo rm "
 	}
 	return prefix + shellQuotePath(path)
 }
