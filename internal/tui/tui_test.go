@@ -320,7 +320,7 @@ func TestFilterCycling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.filter != filterAll || !strings.Contains(m.View().Content, "[ All (41) ]") {
+	if m.filter != filterAll || !strings.Contains(m.View().Content, "[ All (45) ]") {
 		t.Fatalf("initial filter = %q", m.filter)
 	}
 
@@ -347,11 +347,11 @@ func TestFilterCycling(t *testing.T) {
 	}
 
 	pressKey(m, 'f', "f")
-	if m.filter != filterInstalled || !strings.Contains(m.View().Content, "[ Installed (36) ]") {
+	if m.filter != filterInstalled || !strings.Contains(m.View().Content, "[ Installed (39) ]") {
 		t.Fatalf("filter = %q", m.filter)
 	}
 	pressKey(m, 'f', "f")
-	if m.filter != filterUninstalled || !strings.Contains(m.View().Content, "[ Not installed (5) ]") {
+	if m.filter != filterUninstalled || !strings.Contains(m.View().Content, "[ Not installed (6) ]") {
 		t.Fatalf("filter = %q", m.filter)
 	}
 	pressKey(m, 'f', "f")

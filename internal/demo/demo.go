@@ -221,10 +221,28 @@ var stateSpecs = map[string]stateSpec{
 		provenance: domain.ProvenanceMise,
 		detail:     "Managed by mise (ubi:steipete/wacli)",
 	},
+	"twitter-cli": {
+		installed: "0.8.5", latest: "0.8.5", path: "~/.local/bin/twitter",
+		provenance: domain.ProvenanceUV,
+		detail:     "Managed by uv tool (~/.local/share/uv/tools/twitter-cli)",
+	},
 	"hcloud": {
 		installed: "1.50.0", latest: "1.50.0", path: "~/.local/bin/hcloud",
 		provenance: domain.ProvenanceMise,
 		detail:     "Managed by mise (aqua:hetznercloud/cli)",
+	},
+	"cloudflare-cf": {
+		latest: "0.15.0", provenance: domain.ProvenanceNone,
+		detail: "Not installed",
+	},
+	"wrangler": {
+		installed: "4.94.0", latest: "4.94.0", path: "~/.local/share/mise/shims/wrangler",
+		provenance: domain.ProvenanceMise,
+		detail:     "Managed by mise (npm:wrangler)",
+	},
+	"tailscale": {
+		installed: "1.104.1", latest: "1.104.1", path: "/usr/bin/tailscale",
+		provenance: domain.ProvenanceAPT, detail: "System package (Tailscale APT repo)",
 	},
 	"visidata": {
 		installed: "3.1.1", latest: "3.1.1", path: "~/.local/bin/vd",

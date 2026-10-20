@@ -36,7 +36,7 @@ tools = [
   "boardwalk", "trailmark", "quotary", "codexbar", "openclaw", "mercadona-cli",
   "tmux", "byobu", "hive", "gh", "gh-dash", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
   "zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
-  "browser-use", "mcporter", "oracle", "summarize", "wacli", "hcloud", "visidata",
+  "browser-use", "mcporter", "oracle", "summarize", "wacli", "twitter-cli", "hcloud", "cloudflare-cf", "wrangler", "tailscale", "visidata",
 ]
 
 [[profiles]]
@@ -49,7 +49,7 @@ tools = [
   "boardwalk", "trailmark", "openclaw", "mercadona-cli",
   "tmux", "byobu", "hive", "gh", "gh-dash", "lazygit", "fzf", "delta", "ripgrep", "fd", "jq", "btop",
   "zoxide", "eza", "bat", "dust", "broot", "tig", "htop",
-  "wacli", "hcloud", "visidata",
+  "wacli", "twitter-cli", "hcloud", "cloudflare-cf", "wrangler", "tailscale", "visidata",
 ]
 
 [[profiles]]
@@ -707,6 +707,22 @@ version_args = ["--version"]
 version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
 
 [[tools]]
+id = "twitter-cli"
+name = "Twitter CLI"
+binary = "twitter"
+category = "utilities"
+backend = "uv"
+package = "twitter-cli"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Twitter/X CLI for feed, bookmarks, and user timelines in the terminal."
+install_cmd = "mise x uv -- uv tool install twitter-cli"
+update_cmd = "mise x uv -- uv tool upgrade twitter-cli"
+remove_cmd = "mise x uv -- uv tool uninstall twitter-cli"
+version_args = ["--version"]
+version_regex = 'version ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
 id = "hcloud"
 name = "Hetzner Cloud CLI"
 binary = "hcloud"
@@ -721,6 +737,54 @@ update_cmd = "mise upgrade aqua:hetznercloud/cli"
 remove_cmd = "mise unuse --global aqua:hetznercloud/cli"
 version_args = ["version"]
 version_regex = 'hcloud ([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "cloudflare-cf"
+name = "Cloudflare CLI"
+binary = "cf"
+category = "utilities"
+backend = "mise:npm"
+package = "cf"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Cloudflare's unified CLI (cf) for DNS, Workers, and account resources."
+install_cmd = "mise use --global npm:cf@latest"
+update_cmd = "mise upgrade npm:cf"
+remove_cmd = "mise unuse --global npm:cf"
+version_args = ["--version"]
+version_regex = 'cf · v([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "wrangler"
+name = "Wrangler"
+binary = "wrangler"
+category = "utilities"
+backend = "mise:npm"
+package = "wrangler"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Cloudflare Workers CLI to build, preview, and deploy Workers and Pages."
+install_cmd = "mise use --global npm:wrangler@latest"
+update_cmd = "mise upgrade npm:wrangler"
+remove_cmd = "mise unuse --global npm:wrangler"
+version_args = ["--version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "tailscale"
+name = "Tailscale"
+binary = "tailscale"
+category = "utilities"
+backend = "apt"
+package = "tailscale"
+sudo = true
+profiles = ["desktop", "server"]
+description = "WireGuard-based mesh VPN CLI; requires the Tailscale APT repo and a one-time tailscale up login."
+install_cmd = "sudo apt-get install -y tailscale"
+update_cmd = "sudo apt-get install --only-upgrade -y tailscale"
+remove_cmd = "sudo apt-get remove -y tailscale"
+version_args = ["version"]
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
 
 [[tools]]
 id = "visidata"
