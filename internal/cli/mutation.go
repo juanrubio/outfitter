@@ -167,6 +167,12 @@ func printPlan(w io.Writer, plan domain.ActionPlan) error {
 		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
+		if step.Blocked != "" {
+			if _, err := fmt.Fprintf(w, "       warning: cannot %s — %s\n", step.Action, step.Blocked); err != nil {
+				return err
+			}
+			continue
+		}
 		if _, err := fmt.Fprintf(w, "       $ %s\n", step.Command); err != nil {
 			return err
 		}

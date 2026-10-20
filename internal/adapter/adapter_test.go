@@ -395,6 +395,39 @@ func TestMigrateUpdateCommandsUseInstallSemantics(t *testing.T) {
 	}
 }
 
+// TestUnmanagedRemoveCommands verifies that a remove step carrying an
+// explicit file target deletes that file instead of running the
+// backend's (no-op) remove command, and that a blocked step fails
+// loudly instead of pretending to succeed.
+func TestUnmanagedRemoveCommands(t *testing.T) {
+	a, _ := testAdapter(t)
+	tool := domain.Tool{
+		ID: "gemini-cli", Binary: "gemini", Backend: domain.BackendMiseNPM,
+		Package: "@google/gemini-cli",
+	}
+
+	step := planStep(tool, domain.ActionRemove)
+	step.RemovePath = "/home/u/.nvm/versions/node/v24/bin/gemini"
+	step.Command = "rm /home/u/.nvm/versions/node/v24/bin/gemini"
+	specs, err := a.Commands(step)
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+	assertDisplays(t, specs, "rm /home/u/.nvm/versions/node/v24/bin/gemini")
+	if specs[0].Program != "bash" {
+		t.Fatalf("program = %q, want bash shell spec", specs[0].Program)
+	}
+
+	blocked := planStep(tool, domain.ActionRemove)
+	blocked.Blocked = "installed via apt (APT package (du-dust)), not mise:npm; remove it with its own manager"
+	blocked.Command = ""
+	if _, err := a.Commands(blocked); err == nil {
+		t.Fatal("blocked step err = nil, want failure")
+	} else if !strings.Contains(err.Error(), "installed via apt") {
+		t.Fatalf("blocked error = %v, want the blocked reason", err)
+	}
+}
+
 func TestVendorCommandsUseConfiguredShell(t *testing.T) {
 	a, _ := testAdapter(t)
 	tool := domain.Tool{

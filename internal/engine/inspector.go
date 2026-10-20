@@ -231,6 +231,11 @@ func (i *Inspector) inspectTool(
 		installedVersion = i.binaryVersion(ctx, tool, state.BinaryPath)
 	}
 	state.InstalledVersion = NormalizeVersion(installedVersion)
+	if state.BinaryPath != "" {
+		if cmd := removalCommandFor(state.BinaryPath, resolvedPath, i.Stat); cmd != domain.RemovalCommand(state.BinaryPath) {
+			state.RemovalCommand = cmd
+		}
+	}
 	i.detectShadow(ctx, tool, &state, foundOnPath, miseManaged, resolvedPath)
 	return state
 }

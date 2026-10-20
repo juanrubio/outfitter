@@ -231,9 +231,12 @@ func TestInspectLocalShadowedManagedInstalls(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
 
+	copilotBin, copilotNPM := npmCopilotFixture(t, filepath.Join(home, ".nvm", "versions", "node", "v24"))
+
 	miseJSON := strings.ReplaceAll(`{
 		"aqua:bootandy/dust": [{"version": "1.2.6", "install_path": "$HOME/.local/share/mise/installs/aqua/bootandy/dust/1.2.6", "installed": true, "active": true}],
-		"npm:@openai/codex": [{"version": "0.163.0", "install_path": "$HOME/.local/share/mise/installs/node/24/lib/node_modules/@openai/codex", "installed": true, "active": true}]
+		"npm:@openai/codex": [{"version": "0.163.0", "install_path": "$HOME/.local/share/mise/installs/node/24/lib/node_modules/@openai/codex", "installed": true, "active": true}],
+		"npm:@github/copilot": [{"version": "1.0.98", "install_path": "$HOME/.local/share/mise/installs/node/24/lib/node_modules/@github/copilot", "installed": true, "active": true}]
 	}`, "$HOME", home)
 
 	runner := &fakeRunner{respond: func(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -253,22 +256,26 @@ func TestInspectLocalShadowedManagedInstalls(t *testing.T) {
 			return []byte("tig version 2.5.2\n"), nil
 		case "codex":
 			return []byte("codex 0.163.0\n"), nil
+		case "copilot":
+			return []byte("1.0.91\n"), nil
 		default:
 			return nil, fmt.Errorf("unexpected command %s %v", name, args)
 		}
 	}}
 
 	lookPath := lookPathFromMap(map[string]string{
-		"mise":  "/usr/local/bin/mise",
-		"dust":  "/usr/bin/dust",
-		"tig":   "/usr/local/bin/tig",
-		"codex": filepath.Join(home, ".local", "share", "mise", "shims", "codex"),
+		"mise":    "/usr/local/bin/mise",
+		"dust":    "/usr/bin/dust",
+		"tig":     "/usr/local/bin/tig",
+		"codex":   filepath.Join(home, ".local", "share", "mise", "shims", "codex"),
+		"copilot": copilotBin,
 	})
 
 	cat := testCatalog(
 		testTool("dust", "dust", domain.BackendMiseAqua, "bootandy/dust"),
 		testTool("tig", "tig", domain.BackendAPT, "tig"),
 		testTool("codex", "codex", domain.BackendMiseNPM, "@openai/codex"),
+		testTool("copilot-cli", "copilot", domain.BackendMiseNPM, "@github/copilot"),
 	)
 
 	inspector := &Inspector{HomeDir: home, Runner: runner, LookPath: lookPath}
@@ -308,6 +315,24 @@ func TestInspectLocalShadowedManagedInstalls(t *testing.T) {
 	}
 	if codex.ShadowVersion != "" {
 		t.Errorf("codex: ShadowVersion = %q, want empty", codex.ShadowVersion)
+	}
+
+	copilot := states["copilot-cli"]
+	if copilot.InstalledVersion != "1.0.98" {
+		t.Errorf("copilot: InstalledVersion = %q, want %q", copilot.InstalledVersion, "1.0.98")
+	}
+	if copilot.ShadowedBy != copilotBin {
+		t.Errorf("copilot: ShadowedBy = %q, want %q", copilot.ShadowedBy, copilotBin)
+	}
+	if copilot.ShadowVersion != "1.0.91" {
+		t.Errorf("copilot: ShadowVersion = %q, want %q", copilot.ShadowVersion, "1.0.91")
+	}
+	wantRemoval := copilotNPM + " uninstall -g @github/copilot"
+	if copilot.RemovalCommand != wantRemoval {
+		t.Errorf("copilot: RemovalCommand = %q, want %q", copilot.RemovalCommand, wantRemoval)
+	}
+	if got := copilot.ShadowRemovalCommand(); got != wantRemoval {
+		t.Errorf("copilot: ShadowRemovalCommand() = %q, want %q", got, wantRemoval)
 	}
 }
 

@@ -137,11 +137,21 @@ type ToolState struct {
 	LastError        string      `json:"last_error"`
 	ShadowedBy       string      `json:"shadowed_by,omitempty"`
 	ShadowVersion    string      `json:"shadow_version,omitempty"`
+	// RemovalCommand is a manager-specific removal command discovered
+	// for the installed binary (for example npm uninstall for an
+	// npm-global install). Empty means plain rm of BinaryPath.
+	RemovalCommand string `json:"removal_command,omitempty"`
 }
 
 // ShadowRemovalCommand returns the shell command that deletes the
 // shadowing binary, or "" when there is no shadow.
 func (s ToolState) ShadowRemovalCommand() string {
+	if s.ShadowedBy == "" {
+		return ""
+	}
+	if s.RemovalCommand != "" {
+		return s.RemovalCommand
+	}
 	return RemovalCommand(s.ShadowedBy)
 }
 

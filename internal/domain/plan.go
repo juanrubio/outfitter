@@ -29,6 +29,19 @@ type PlanStep struct {
 	// empty when the install overwrites the discovered path (or the step
 	// is not a migration), so no cleanup warning is needed.
 	StrayBinaryPath string `json:"stray_binary_path,omitempty"`
+	// StrayRemoval overrides the rm command derived from
+	// StrayBinaryPath when discovery found a manager-specific removal
+	// (for example npm uninstall for an npm-global stray).
+	StrayRemoval string `json:"stray_removal,omitempty"`
+	// RemovePath, when set on a remove step, is the discovered binary
+	// file to delete directly because no backend owns the installation.
+	// The step's Command is the matching rm command.
+	RemovePath string `json:"remove_path,omitempty"`
+	// Blocked, when non-empty, explains why the step cannot run (for
+	// example a remove whose install is owned by a different manager).
+	// Adapters must fail blocked steps with this reason instead of
+	// executing anything.
+	Blocked string `json:"blocked,omitempty"`
 }
 
 // RemovalNeedsSudo reports whether deleting path requires elevated
@@ -53,19 +66,22 @@ func RemovalCommand(path string) string {
 	if RemovalNeedsSudo(path) {
 		prefix = "sudo rm "
 	}
-	return prefix + shellQuotePath(path)
+	return prefix + ShellQuotePath(path)
 }
 
 // StrayRemovalCommand returns the shell command that deletes the step's
 // stray binary, ready for the user to run after the plan completes. It
 // returns "" when the step leaves no stray binary behind.
 func (s PlanStep) StrayRemovalCommand() string {
+	if s.StrayRemoval != "" {
+		return s.StrayRemoval
+	}
 	return RemovalCommand(s.StrayBinaryPath)
 }
 
-// shellQuotePath returns the path unchanged when it needs no quoting, or
+// ShellQuotePath returns the path unchanged when it needs no quoting, or
 // single-quoted (with embedded quotes escaped) otherwise.
-func shellQuotePath(path string) string {
+func ShellQuotePath(path string) string {
 	if strings.IndexFunc(path, func(r rune) bool {
 		switch {
 		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
@@ -382,11 +398,35 @@ func BuildActionPlan(
 				step.Migrate = true
 				step.Command = tool.InstallCommand()
 				step.StrayBinaryPath = strayBinaryPath(tool, state)
+				step.StrayRemoval = state.RemovalCommand
 			}
 			updates = append(updates, step)
 		case ActionRemove:
 			step.FromVersion = state.InstalledVersion
 			step.Command = tool.RemoveCommand()
+			if !state.ManagedByBackend(tool.Backend) {
+				// The backend's remove command cannot uninstall what it
+				// never installed (mise unuse / apt --only-upgrade style
+				// no-ops). An external binary is deleted directly; an
+				// install owned by a different manager is blocked so the
+				// user removes it with that manager instead.
+				if state.Provenance == ProvenanceExternal && state.BinaryPath != "" {
+					step.RemovePath = state.BinaryPath
+					step.Command = RemovalCommand(state.BinaryPath)
+					if state.RemovalCommand != "" {
+						step.Command = state.RemovalCommand
+					}
+					step.Sudo = step.Sudo || RemovalNeedsSudo(state.BinaryPath)
+				} else {
+					detail := state.ProvenanceDetail
+					if detail == "" {
+						detail = state.BinaryPath
+					}
+					step.Blocked = fmt.Sprintf("installed via %s (%s), not %s; remove it with its own manager",
+						state.Provenance, detail, tool.Backend)
+					step.Command = ""
+				}
+			}
 			removals = append(removals, step)
 		default:
 			continue

@@ -94,6 +94,16 @@ func (a *Adapter) Commands(step domain.PlanStep) ([]CommandSpec, error) {
 	if !validAction(step.Action) {
 		return nil, fmt.Errorf("tool %q: unsupported action %q", step.Tool.ID, step.Action)
 	}
+	if step.Blocked != "" {
+		return nil, fmt.Errorf("tool %q: %s", step.Tool.ID, step.Blocked)
+	}
+	if step.RemovePath != "" {
+		command := step.Command
+		if command == "" {
+			command = domain.RemovalCommand(step.RemovePath)
+		}
+		return []CommandSpec{shellSpec(command)}, nil
+	}
 
 	switch backend {
 	case domain.BackendMiseAqua, domain.BackendMiseUbi, domain.BackendMiseGitHub,

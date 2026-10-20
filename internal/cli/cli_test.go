@@ -559,6 +559,54 @@ func unintegratedShellDeps(t *testing.T) Deps {
 	return deps
 }
 
+// TestRemoveUnmanagedDryRun verifies that removing an unmanaged install
+// never presents the backend's no-op remove command: an external binary
+// is deleted directly, and an install owned by another manager is
+// blocked with an explanation.
+func TestRemoveUnmanagedDryRun(t *testing.T) {
+	deps, _ := testDeps(t)
+	baseInspect := deps.InspectLocal
+	deps.InspectLocal = func(ctx context.Context, cat *catalog.Catalog) map[string]domain.ToolState {
+		states := baseInspect(ctx, cat)
+		states["gemini-cli"] = domain.ToolState{
+			InstalledVersion: "0.43.0", LatestVersion: "0.64.0",
+			BinaryPath:  "/home/u/.nvm/versions/node/v24/bin/gemini",
+			Provenance:  domain.ProvenanceExternal,
+			CheckStatus: domain.StatusReady,
+		}
+		states["dust"] = domain.ToolState{
+			InstalledVersion: "1.2.4", LatestVersion: "1.2.6",
+			BinaryPath:       "/usr/bin/dust",
+			Provenance:       domain.ProvenanceAPT,
+			ProvenanceDetail: "APT package (du-dust)",
+			CheckStatus:      domain.StatusReady,
+		}
+		return states
+	}
+
+	out, err := runCLI(t, deps, "remove", "gemini-cli", "--dry-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "$ rm /home/u/.nvm/versions/node/v24/bin/gemini") {
+		t.Errorf("external remove should delete the binary directly:\n%s", out)
+	}
+	if strings.Contains(out, "mise unuse") {
+		t.Errorf("external remove must not present the backend no-op:\n%s", out)
+	}
+
+	out, err = runCLI(t, deps, "remove", "dust", "--dry-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "cannot remove") || !strings.Contains(out, "installed via apt") {
+		t.Errorf("blocked remove should explain itself:\n%s", out)
+	}
+	if strings.Contains(out, "$ mise") {
+		t.Errorf("blocked remove must not present a runnable command:\n%s", out)
+	}
+}
+
 func TestDoctorDiagnoseDryRunAndFix(t *testing.T) {
 	deps := unintegratedShellDeps(t)
 	rc := filepath.Join(deps.HomeDir, ".zshrc")

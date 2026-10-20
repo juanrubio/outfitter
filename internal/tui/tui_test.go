@@ -677,6 +677,43 @@ func TestShadowSweepHeaderAndKey(t *testing.T) {
 	}
 }
 
+// TestPlanReviewUnmanagedRemovals verifies the Plan & Apply review shows
+// a direct rm for an external binary and a blocked warning for an
+// install owned by a different manager.
+func TestPlanReviewUnmanagedRemovals(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmux := m.states["tmux"]
+	tmux.BinaryPath = "/usr/local/bin/tmux"
+	tmux.Provenance = domain.ProvenanceExternal
+	m.states["tmux"] = tmux
+	dust := m.states["dust"]
+	dust.BinaryPath = "/usr/bin/dust"
+	dust.Provenance = domain.ProvenanceAPT
+	dust.ProvenanceDetail = "APT package (du-dust)"
+	m.states["dust"] = dust
+	m.actions = map[string]domain.DesiredAction{
+		"tmux": domain.ActionRemove,
+		"dust": domain.ActionRemove,
+	}
+	m.rebuildPlan()
+
+	pressKey(m, 'a', "a")
+	screen := m.View().Content
+	for _, marker := range []string{
+		"sudo rm /usr/local/bin/tmux",
+		"cannot remove",
+		"installed via apt",
+	} {
+		if !strings.Contains(screen, marker) {
+			t.Errorf("plan screen missing %q", marker)
+		}
+	}
+}
+
 func TestPlanEmptyStateAndHelp(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	m, err := NewModel(Options{Demo: true, Width: 80, Height: 24})

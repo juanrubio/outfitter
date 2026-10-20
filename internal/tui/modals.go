@@ -214,8 +214,15 @@ func (m *Model) appendPlanSection(
 		backend += "]"
 		row := fmt.Sprintf("%s %s %s %s", symbol, padDisplay(step.Tool.Name, 20), padDisplay(version, 22), backend)
 		command := "  $ " + step.Command
+		if step.Command == "" {
+			command = ""
+		}
 		row += truncateDisplay(command, maxInt(innerWidth-displayWidth(row)-2, 0))
 		content = append(content, []span{{text: truncateDisplay(row, innerWidth), token: token}})
+		if step.Blocked != "" {
+			content = append(content,
+				[]span{{text: truncateDisplay("⚠ cannot "+string(step.Action)+": "+step.Blocked, innerWidth), token: "error"}})
+		}
 	}
 	content = append(content, nil)
 	return content

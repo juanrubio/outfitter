@@ -433,6 +433,136 @@ func TestBuildActionPlanMigratesUnmanagedUpdates(t *testing.T) {
 // records the unmanaged binary that will remain on disk after the managed
 // copy is installed, together with a ready-to-run removal command, and
 // stays silent when the backend's install would overwrite that very path.
+// TestBuildActionPlanRemoveUnmanaged verifies that removing a tool the
+// catalog backend does not own never synthesizes the backend's remove
+// command (a successful no-op): an external binary is deleted directly,
+// and an install owned by a different manager is blocked with a reason.
+// TestDiscoveredRemovalCommandFlowsToPlan verifies a removal command
+// discovered during inspection (e.g. npm uninstall for an npm-global
+// stray) is what plan steps display and execute, for both migrating
+// updates (stray) and unmanaged removes.
+func TestDiscoveredRemovalCommandFlowsToPlan(t *testing.T) {
+	tool := domain.Tool{ID: "copilot-cli", Binary: "copilot", Backend: domain.BackendMiseNPM, Package: "@github/copilot"}
+	state := domain.ToolState{
+		InstalledVersion: "1.0.91", LatestVersion: "1.0.98",
+		BinaryPath:     "/home/u/.nvm/versions/node/v24/bin/copilot",
+		Provenance:     domain.ProvenanceExternal,
+		RemovalCommand: "/home/u/.nvm/versions/node/v24/bin/npm uninstall -g @github/copilot",
+	}
+	states := map[string]domain.ToolState{tool.ID: state}
+
+	update := domain.BuildActionPlan([]domain.Tool{tool}, states,
+		map[string]domain.DesiredAction{tool.ID: domain.ActionUpdate}, true, "")
+	if len(update.Updates) != 1 {
+		t.Fatalf("updates = %d, want 1", len(update.Updates))
+	}
+	if got := update.Updates[0].StrayRemovalCommand(); got != state.RemovalCommand {
+		t.Errorf("StrayRemovalCommand() = %q, want discovered %q", got, state.RemovalCommand)
+	}
+
+	remove := domain.BuildActionPlan([]domain.Tool{tool}, states,
+		map[string]domain.DesiredAction{tool.ID: domain.ActionRemove}, true, "")
+	if len(remove.Removals) != 1 {
+		t.Fatalf("removals = %d, want 1", len(remove.Removals))
+	}
+	if remove.Removals[0].Command != state.RemovalCommand {
+		t.Errorf("remove Command = %q, want discovered %q", remove.Removals[0].Command, state.RemovalCommand)
+	}
+
+	shadowed := state
+	shadowed.ShadowedBy = state.BinaryPath
+	shadowed.ShadowVersion = state.InstalledVersion
+	shadowed.InstalledVersion = "1.0.98"
+	if got := shadowed.ShadowRemovalCommand(); got != state.RemovalCommand {
+		t.Errorf("ShadowRemovalCommand() = %q, want discovered %q", got, state.RemovalCommand)
+	}
+}
+
+func TestBuildActionPlanRemoveUnmanaged(t *testing.T) {
+	tests := []struct {
+		name        string
+		tool        domain.Tool
+		state       domain.ToolState
+		wantRemove  string
+		wantCommand string
+		wantSudo    bool
+		wantBlocked bool
+	}{
+		{
+			name: "external npm-global binary is deleted directly",
+			tool: domain.Tool{ID: "gemini-cli", Binary: "gemini", Backend: domain.BackendMiseNPM, Package: "@google/gemini-cli"},
+			state: domain.ToolState{
+				InstalledVersion: "0.43.0", Provenance: domain.ProvenanceExternal,
+				BinaryPath: "/home/u/.nvm/versions/node/v24/bin/gemini",
+			},
+			wantRemove:  "/home/u/.nvm/versions/node/v24/bin/gemini",
+			wantCommand: "rm /home/u/.nvm/versions/node/v24/bin/gemini",
+		},
+		{
+			name: "external system binary deletes with sudo",
+			tool: domain.Tool{ID: "tig", Binary: "tig", Backend: domain.BackendAPT, Package: "tig"},
+			state: domain.ToolState{
+				InstalledVersion: "2.5.2", Provenance: domain.ProvenanceExternal,
+				BinaryPath: "/usr/local/bin/tig",
+			},
+			wantRemove:  "/usr/local/bin/tig",
+			wantCommand: "sudo rm /usr/local/bin/tig",
+			wantSudo:    true,
+		},
+		{
+			name: "apt-owned binary for a mise tool is blocked",
+			tool: domain.Tool{ID: "dust", Binary: "dust", Backend: domain.BackendMiseAqua, Package: "bootandy/dust"},
+			state: domain.ToolState{
+				InstalledVersion: "1.2.4", Provenance: domain.ProvenanceAPT,
+				BinaryPath: "/usr/bin/dust", ProvenanceDetail: "APT package (du-dust)",
+			},
+			wantBlocked: true,
+		},
+		{
+			name: "managed remove stays on the backend command",
+			tool: domain.Tool{ID: "codex", Binary: "codex", Backend: domain.BackendMiseNPM, Package: "@openai/codex"},
+			state: domain.ToolState{
+				InstalledVersion: "0.163.0", Provenance: domain.ProvenanceMise,
+				BinaryPath: "/home/u/.local/share/mise/shims/codex",
+			},
+			wantCommand: "mise unuse --global npm:@openai/codex",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			states := map[string]domain.ToolState{test.tool.ID: test.state}
+			actions := map[string]domain.DesiredAction{test.tool.ID: domain.ActionRemove}
+			plan := domain.BuildActionPlan([]domain.Tool{test.tool}, states, actions, true, "")
+			if len(plan.Removals) != 1 {
+				t.Fatalf("removals = %d, want 1", len(plan.Removals))
+			}
+			step := plan.Removals[0]
+			if step.RemovePath != test.wantRemove {
+				t.Errorf("RemovePath = %q, want %q", step.RemovePath, test.wantRemove)
+			}
+			if test.wantBlocked {
+				if step.Blocked == "" {
+					t.Errorf("Blocked is empty, want a reason (step %+v)", step)
+				}
+				if step.Command != "" {
+					t.Errorf("Command = %q, want empty for a blocked step", step.Command)
+				}
+				return
+			}
+			if step.Blocked != "" {
+				t.Errorf("Blocked = %q, want empty", step.Blocked)
+			}
+			if step.Command != test.wantCommand {
+				t.Errorf("Command = %q, want %q", step.Command, test.wantCommand)
+			}
+			if step.Sudo != test.wantSudo && test.wantRemove != "" {
+				t.Errorf("Sudo = %v, want %v", step.Sudo, test.wantSudo)
+			}
+		})
+	}
+}
+
 func TestBuildActionPlanStrayBinaries(t *testing.T) {
 	tests := []struct {
 		name       string
