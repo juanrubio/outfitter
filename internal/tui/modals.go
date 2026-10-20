@@ -177,6 +177,7 @@ func (m *Model) planReviewBox(width, height int) []string {
 		content = m.appendPlanSection(content, "INSTALLATIONS", installs, m.plan.Installations, "+", "accent", innerWidth)
 		content = m.appendPlanSection(content, "UPDATES", updates, m.plan.Updates, "↑", "low", innerWidth)
 		content = m.appendPlanSection(content, "REMOVALS", removals, m.plan.Removals, "-", "error", innerWidth)
+		content = appendStraySection(content, m.plan, innerWidth)
 	}
 
 	if len(content) > innerHeight {
@@ -215,6 +216,33 @@ func (m *Model) appendPlanSection(
 		command := "  $ " + step.Command
 		row += truncateDisplay(command, maxInt(innerWidth-displayWidth(row)-2, 0))
 		content = append(content, []span{{text: truncateDisplay(row, innerWidth), token: token}})
+	}
+	content = append(content, nil)
+	return content
+}
+
+// appendStraySection warns about unmanaged binaries that stay on disk
+// after a migrating update, with the exact command to remove each one.
+func appendStraySection(content [][]span, plan domain.ActionPlan, innerWidth int) [][]span {
+	var strays []domain.PlanStep
+	for _, step := range plan.Steps() {
+		if step.StrayBinaryPath != "" {
+			strays = append(strays, step)
+		}
+	}
+	if len(strays) == 0 {
+		return content
+	}
+	content = append(content,
+		[]span{{text: fmt.Sprintf("STRAY BINARIES (⚠%d)", len(strays)), token: "low", bold: true}},
+	)
+	for _, step := range strays {
+		warning := fmt.Sprintf("⚠ %s: %s is not managed by %s and may shadow the update",
+			step.Tool.Name, step.StrayBinaryPath, step.Tool.Backend)
+		content = append(content,
+			[]span{{text: truncateDisplay(warning, innerWidth), token: "low"}},
+			[]span{{text: truncateDisplay("  remove after applying: $ "+step.StrayRemovalCommand(), innerWidth), token: "text"}},
+		)
 	}
 	content = append(content, nil)
 	return content

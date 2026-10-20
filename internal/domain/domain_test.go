@@ -408,6 +408,128 @@ func TestBuildActionPlanMigratesUnmanagedUpdates(t *testing.T) {
 		t.Errorf("codex: command = %q, want update command", codex.Command)
 	}
 }
+
+// TestBuildActionPlanStrayBinaries verifies that a migrating update
+// records the unmanaged binary that will remain on disk after the managed
+// copy is installed, together with a ready-to-run removal command, and
+// stays silent when the backend's install would overwrite that very path.
+func TestBuildActionPlanStrayBinaries(t *testing.T) {
+	tests := []struct {
+		name       string
+		tool       domain.Tool
+		provenance domain.Provenance
+		binaryPath string
+		wantStray  string
+		wantRemove string
+	}{
+		{
+			name:       "mise tool stray in /usr/bin",
+			tool:       domain.Tool{ID: "dust", Binary: "dust", Backend: domain.BackendMiseAqua, Package: "bootandy/dust"},
+			provenance: domain.ProvenanceExternal,
+			binaryPath: "/usr/bin/dust",
+			wantStray:  "/usr/bin/dust",
+			wantRemove: "sudo rm /usr/bin/dust",
+		},
+		{
+			name:       "mise tool stray in /usr/local/bin",
+			tool:       domain.Tool{ID: "broot", Binary: "broot", Backend: domain.BackendMiseUbi, Package: "Canop/broot"},
+			provenance: domain.ProvenanceExternal,
+			binaryPath: "/usr/local/bin/broot",
+			wantStray:  "/usr/local/bin/broot",
+			wantRemove: "sudo rm /usr/local/bin/broot",
+		},
+		{
+			name:       "apt tool stray outside system dirs",
+			tool:       domain.Tool{ID: "tig", Binary: "tig", Backend: domain.BackendAPT, Package: "tig"},
+			provenance: domain.ProvenanceExternal,
+			binaryPath: "/usr/local/bin/tig",
+			wantStray:  "/usr/local/bin/tig",
+			wantRemove: "sudo rm /usr/local/bin/tig",
+		},
+		{
+			name:       "apt tool in system dir is overwritten by apt",
+			tool:       domain.Tool{ID: "tmux", Binary: "tmux", Backend: domain.BackendAPT, Package: "tmux"},
+			provenance: domain.ProvenanceExternal,
+			binaryPath: "/usr/bin/tmux",
+			wantStray:  "",
+			wantRemove: "",
+		},
+		{
+			name:       "npm tool stray under nvm needs no sudo",
+			tool:       domain.Tool{ID: "codex", Binary: "codex", Backend: domain.BackendMiseNPM, Package: "@openai/codex"},
+			provenance: domain.ProvenanceExternal,
+			binaryPath: "/home/u/.nvm/versions/node/v24/bin/codex",
+			wantStray:  "/home/u/.nvm/versions/node/v24/bin/codex",
+			wantRemove: "rm /home/u/.nvm/versions/node/v24/bin/codex",
+		},
+		{
+			name:       "vendor tool in install dir is overwritten by installer",
+			tool:       domain.Tool{ID: "claude-code", Binary: "claude", Backend: domain.BackendVendor, InstallCmd: "install claude", UpdateCmd: "update claude"},
+			provenance: domain.ProvenanceExternal,
+			binaryPath: "/home/u/.local/bin/claude",
+			wantStray:  "",
+			wantRemove: "",
+		},
+		{
+			name:       "vendor tool stray outside install dir",
+			tool:       domain.Tool{ID: "claude-code", Binary: "claude", Backend: domain.BackendVendor, InstallCmd: "install claude", UpdateCmd: "update claude"},
+			provenance: domain.ProvenanceExternal,
+			binaryPath: "/opt/claude/bin/claude",
+			wantStray:  "/opt/claude/bin/claude",
+			wantRemove: "sudo rm /opt/claude/bin/claude",
+		},
+		{
+			name:       "source tool stray outside install dir",
+			tool:       domain.Tool{ID: "quotary", Binary: "quotary", Backend: domain.BackendSource, SourceDir: "~/repos/quotary"},
+			provenance: domain.ProvenanceExternal,
+			binaryPath: "/usr/local/bin/quotary",
+			wantStray:  "/usr/local/bin/quotary",
+			wantRemove: "sudo rm /usr/local/bin/quotary",
+		},
+		{
+			name:       "managed mise tool has no stray",
+			tool:       domain.Tool{ID: "codex", Binary: "codex", Backend: domain.BackendMiseNPM, Package: "@openai/codex"},
+			provenance: domain.ProvenanceMise,
+			binaryPath: "/home/u/.local/share/mise/shims/codex",
+			wantStray:  "",
+			wantRemove: "",
+		},
+		{
+			name:       "stray path with space is quoted",
+			tool:       domain.Tool{ID: "foo", Binary: "foo", Backend: domain.BackendMiseAqua, Package: "example/foo"},
+			provenance: domain.ProvenanceExternal,
+			binaryPath: "/home/u/my tools/foo",
+			wantStray:  "/home/u/my tools/foo",
+			wantRemove: "rm '/home/u/my tools/foo'",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			states := map[string]domain.ToolState{
+				test.tool.ID: {
+					InstalledVersion: "1.0.0",
+					LatestVersion:    "2.0.0",
+					BinaryPath:       test.binaryPath,
+					Provenance:       test.provenance,
+				},
+			}
+			actions := map[string]domain.DesiredAction{test.tool.ID: domain.ActionUpdate}
+			plan := domain.BuildActionPlan([]domain.Tool{test.tool}, states, actions, true, "")
+			if len(plan.Updates) != 1 {
+				t.Fatalf("updates = %d, want 1", len(plan.Updates))
+			}
+			step := plan.Updates[0]
+			if step.StrayBinaryPath != test.wantStray {
+				t.Errorf("StrayBinaryPath = %q, want %q", step.StrayBinaryPath, test.wantStray)
+			}
+			if got := step.StrayRemovalCommand(); got != test.wantRemove {
+				t.Errorf("StrayRemovalCommand() = %q, want %q", got, test.wantRemove)
+			}
+		})
+	}
+}
+
 func TestBuildActionPlanBootstrapRules(t *testing.T) {
 	miseTool := domain.Tool{ID: "codex", Binary: "codex", Backend: domain.BackendMiseNPM, Package: "@openai/codex"}
 	uvTool := domain.Tool{ID: "browser-use", Binary: "browser-use", Backend: domain.BackendUV, Package: "browser-use"}

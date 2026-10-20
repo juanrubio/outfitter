@@ -473,6 +473,51 @@ func TestUpdateAllDryRunAndSpecific(t *testing.T) {
 	requireExit(t, err, 2)
 }
 
+// TestUpdateWarnsAboutStrayBinaries verifies that updating an unmanaged
+// (external) install warns about the stray binary that will remain on
+// disk and offers the exact command to remove it, both in the dry-run
+// plan and in the post-run summary.
+func TestUpdateWarnsAboutStrayBinaries(t *testing.T) {
+	deps, _ := testDeps(t)
+	baseInspect := deps.InspectLocal
+	deps.InspectLocal = func(ctx context.Context, cat *catalog.Catalog) map[string]domain.ToolState {
+		states := baseInspect(ctx, cat)
+		states["dust"] = domain.ToolState{
+			InstalledVersion: "1.2.4",
+			LatestVersion:    "1.2.6",
+			BinaryPath:       "/usr/bin/dust",
+			Provenance:       domain.ProvenanceExternal,
+			CheckStatus:      domain.StatusReady,
+		}
+		return states
+	}
+
+	out, err := runCLI(t, deps, "update", "dust", "--dry-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"mise use --global aqua:bootandy/dust@latest",
+		"/usr/bin/dust",
+		"sudo rm /usr/bin/dust",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("dry-run output missing %q:\n%s", want, out)
+		}
+	}
+
+	out, err = runCLI(t, deps, "update", "dust", "--yes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "✓ update dust") {
+		t.Fatalf("unexpected update output:\n%s", out)
+	}
+	if !strings.Contains(out, "sudo rm /usr/bin/dust") {
+		t.Errorf("post-run summary missing stray removal command:\n%s", out)
+	}
+}
+
 func TestUpdateAllConfirmedAndFailure(t *testing.T) {
 	deps, _ := testDeps(t)
 	out, err := runCLI(t, deps, "update", "--all", "--yes")

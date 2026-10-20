@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -23,6 +24,79 @@ type PlanStep struct {
 	// binary). Such a step executes the backend's install command instead
 	// of its upgrade-only command, which would silently change nothing.
 	Migrate bool `json:"migrate,omitempty"`
+	// StrayBinaryPath is the unmanaged binary that remains on disk after
+	// a migrating update installs the managed copy elsewhere. It is
+	// empty when the install overwrites the discovered path (or the step
+	// is not a migration), so no cleanup warning is needed.
+	StrayBinaryPath string `json:"stray_binary_path,omitempty"`
+}
+
+// StrayRemovalCommand returns the shell command that deletes the step's
+// stray binary, ready for the user to run after the plan completes. It
+// returns "" when the step leaves no stray binary behind.
+func (s PlanStep) StrayRemovalCommand() string {
+	path := strings.TrimSpace(s.StrayBinaryPath)
+	if path == "" {
+		return ""
+	}
+	prefix := "rm "
+	for _, systemPrefix := range []string{"/usr/", "/bin/", "/sbin/", "/opt/"} {
+		if strings.HasPrefix(path, systemPrefix) {
+			prefix = "sudo rm "
+			break
+		}
+	}
+	return prefix + shellQuotePath(path)
+}
+
+// shellQuotePath returns the path unchanged when it needs no quoting, or
+// single-quoted (with embedded quotes escaped) otherwise.
+func shellQuotePath(path string) string {
+	if strings.IndexFunc(path, func(r rune) bool {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			return false
+		}
+		switch r {
+		case '/', '.', '_', '-', '@', '%', '+', '=', ':', ',':
+			return false
+		}
+		return true
+	}) < 0 {
+		return path
+	}
+	return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
+}
+
+// strayBinaryPath returns the discovered binary path that a migrating
+// install leaves behind, or "" when the backend's install overwrites the
+// discovered path.
+func strayBinaryPath(tool Tool, state ToolState) string {
+	path := strings.TrimSpace(state.BinaryPath)
+	if path == "" {
+		return ""
+	}
+	switch tool.Backend {
+	case BackendAPT:
+		// apt installs into the system directories, overwriting a stray
+		// binary discovered there.
+		switch filepath.Dir(path) {
+		case "/usr/bin", "/bin", "/usr/sbin", "/sbin":
+			return ""
+		}
+		return path
+	case BackendVendor, BackendSource:
+		// Vendor installers and source builds place the binary in the
+		// user install directory, overwriting a stray discovered there.
+		if strings.Contains(filepath.ToSlash(path), "/.local/bin/") {
+			return ""
+		}
+		return path
+	default:
+		// mise and uv keep managed copies under their own directories,
+		// never at the discovered external path.
+		return path
+	}
 }
 
 // ActionPlan is the ordered, dry-run representation of a pending plan.
@@ -285,6 +359,7 @@ func BuildActionPlan(
 				// tool by running the install command instead.
 				step.Migrate = true
 				step.Command = tool.InstallCommand()
+				step.StrayBinaryPath = strayBinaryPath(tool, state)
 			}
 			updates = append(updates, step)
 		case ActionRemove:

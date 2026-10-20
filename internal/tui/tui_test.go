@@ -511,6 +511,42 @@ func TestPlanReviewApplyingAndBootstrap(t *testing.T) {
 	}
 }
 
+// TestPlanReviewWarnsAboutStrayBinaries verifies that the Plan & Apply
+// review warns when a migrating update leaves an unmanaged binary on
+// disk and shows the exact command to remove it.
+func TestPlanReviewWarnsAboutStrayBinaries(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := m.states["tmux"]
+	state.BinaryPath = "/usr/local/bin/tmux"
+	state.Provenance = domain.ProvenanceExternal
+	m.states["tmux"] = state
+	m.actions = map[string]domain.DesiredAction{"tmux": domain.ActionUpdate}
+	m.rebuildPlan()
+
+	if len(m.plan.Updates) != 1 || !m.plan.Updates[0].Migrate {
+		t.Fatalf("expected one migrating update, got %+v", m.plan.Updates)
+	}
+
+	pressKey(m, 'a', "a")
+	if m.view != "plan" {
+		t.Fatalf("view = %q, want plan", m.view)
+	}
+	screen := m.View().Content
+	for _, marker := range []string{
+		"STRAY BINARIES",
+		"/usr/local/bin/tmux",
+		"sudo rm /usr/local/bin/tmux",
+	} {
+		if !strings.Contains(screen, marker) {
+			t.Errorf("plan screen missing %q", marker)
+		}
+	}
+}
+
 func TestPlanEmptyStateAndHelp(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	m, err := NewModel(Options{Demo: true, Width: 80, Height: 24})

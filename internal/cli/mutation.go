@@ -170,6 +170,15 @@ func printPlan(w io.Writer, plan domain.ActionPlan) error {
 		if _, err := fmt.Fprintf(w, "       $ %s\n", step.Command); err != nil {
 			return err
 		}
+		if step.StrayBinaryPath != "" {
+			if _, err := fmt.Fprintf(w, "       warning: unmanaged binary %s stays on disk and may shadow the managed %s install\n",
+				step.StrayBinaryPath, step.Tool.Backend); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(w, "       remove it after updating: $ %s\n", step.StrayRemovalCommand()); err != nil {
+				return err
+			}
+		}
 	}
 	_, err := fmt.Fprintln(w)
 	return err
@@ -194,6 +203,22 @@ func printResult(w io.Writer, result engine.PlanResult) error {
 	if result.LogPath != "" {
 		if _, err := fmt.Fprintf(w, "Log: %s\n", result.LogPath); err != nil {
 			return err
+		}
+	}
+	strays := make([]domain.PlanStep, 0, len(result.Steps))
+	for _, step := range result.Steps {
+		if step.Success && step.Step.StrayBinaryPath != "" {
+			strays = append(strays, step.Step)
+		}
+	}
+	if len(strays) > 0 {
+		if _, err := fmt.Fprintln(w, "Stray binaries left behind (unmanaged copies that may shadow the updated tools):"); err != nil {
+			return err
+		}
+		for _, step := range strays {
+			if _, err := fmt.Fprintf(w, "  %s: $ %s\n", step.StrayBinaryPath, step.StrayRemovalCommand()); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
