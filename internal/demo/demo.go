@@ -186,7 +186,7 @@ var stateSpecs = map[string]stateSpec{
 	"broot": {
 		installed: "1.44.2", latest: "1.44.2", path: "~/.local/share/mise/shims/broot",
 		provenance: domain.ProvenanceMise,
-		detail:     "Managed by mise (ubi:Canop/broot)",
+		detail:     "Managed by mise (github:Canop/broot)",
 	},
 	"tig": {
 		installed: "2.5.8", latest: "2.5.8", path: "/usr/bin/tig",

@@ -311,6 +311,33 @@ func TestInspectLocalShadowedManagedInstalls(t *testing.T) {
 	}
 }
 
+// TestLookupMiseDoesNotCrossMatchUbiAndGitHub verifies that a tool
+// installed under the ubi spec does not count as managed for a
+// mise:github catalog entry (and vice versa). The backends install
+// different artifacts — ubi famously picks the macOS binary out of
+// broot's multi-platform zip — so cross-matching would mask a broken
+// install behind the other backend's version forever.
+func TestLookupMiseDoesNotCrossMatchUbiAndGitHub(t *testing.T) {
+	t.Parallel()
+	entry := miseInstalled{Version: "1.61.0", InstallPath: "/mise/installs/broot"}
+
+	githubTool := testTool("broot", "broot", domain.BackendMiseGitHub, "Canop/broot")
+	if _, ok := lookupMise(map[string]miseInstalled{"ubi:canop/broot": entry}, githubTool); ok {
+		t.Error("github-backend tool matched a ubi install")
+	}
+	if _, ok := lookupMise(map[string]miseInstalled{"github:canop/broot": entry}, githubTool); !ok {
+		t.Error("github-backend tool did not match its github install")
+	}
+
+	ubiTool := testTool("broot", "broot", domain.BackendMiseUbi, "Canop/broot")
+	if _, ok := lookupMise(map[string]miseInstalled{"github:canop/broot": entry}, ubiTool); ok {
+		t.Error("ubi-backend tool matched a github install")
+	}
+	if _, ok := lookupMise(map[string]miseInstalled{"ubi:canop/broot": entry}, ubiTool); !ok {
+		t.Error("ubi-backend tool did not match its ubi install")
+	}
+}
+
 func TestInspectLocalMiseSliceFormat(t *testing.T) {
 	t.Parallel()
 	runner := &fakeRunner{respond: func(_ context.Context, name string, args ...string) ([]byte, error) {

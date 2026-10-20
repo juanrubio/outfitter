@@ -465,13 +465,18 @@ func miseLookupKeys(tool domain.Tool) []string {
 	if pkg != "" {
 		candidates = append(candidates, pkg, string(tool.Backend)+":"+pkg)
 	}
+	// Only the tool's own backend spec counts as managed. Cross-matching
+	// aqua/ubi/github installs would mask a broken or wrong-platform
+	// artifact installed by a different backend (e.g. ubi picking the
+	// macOS binary out of broot's multi-platform zip) behind this
+	// backend's version.
 	switch tool.Backend {
 	case domain.BackendMiseAqua:
-		candidates = append(candidates, "aqua:"+pkg, "github:"+pkg)
+		candidates = append(candidates, "aqua:"+pkg)
 	case domain.BackendMiseUbi:
-		candidates = append(candidates, "ubi:"+pkg, "github:"+pkg)
+		candidates = append(candidates, "ubi:"+pkg)
 	case domain.BackendMiseGitHub:
-		candidates = append(candidates, "github:"+pkg, "ubi:"+pkg)
+		candidates = append(candidates, "github:"+pkg)
 	case domain.BackendMiseNPM:
 		candidates = append(candidates, "npm:"+pkg)
 	case domain.BackendUV:

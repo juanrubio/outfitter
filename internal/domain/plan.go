@@ -300,8 +300,10 @@ func miseSpec(t Tool) string {
 	switch t.Backend {
 	case BackendMiseAqua:
 		return "aqua:" + pkg
-	case BackendMiseUbi, BackendMiseGitHub:
+	case BackendMiseUbi:
 		return "ubi:" + pkg
+	case BackendMiseGitHub:
+		return "github:" + pkg
 	case BackendMiseNPM:
 		return "npm:" + pkg
 	default:

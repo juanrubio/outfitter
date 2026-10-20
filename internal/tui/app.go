@@ -281,7 +281,7 @@ func NewModel(opts Options) (*Model, error) {
 		m.miseVersion = "2026.10.1"
 	}
 	if m.platformNotice == "" {
-		m.platformNotice = "Ubuntu 24.04 · amd64"
+		m.platformNotice = engine.DetectPlatformNotice()
 	}
 	if _, ok := m.catalog.ProfileByID(m.activeProfileID); !ok && len(m.catalog.Profiles) > 0 {
 		m.activeProfileID = m.catalog.Profiles[0].ID

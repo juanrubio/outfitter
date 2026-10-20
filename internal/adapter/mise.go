@@ -125,8 +125,10 @@ func miseSpec(tool domain.Tool) string {
 	switch tool.Backend {
 	case domain.BackendMiseAqua:
 		return "aqua:" + pkg
-	case domain.BackendMiseUbi, domain.BackendMiseGitHub:
+	case domain.BackendMiseUbi:
 		return "ubi:" + pkg
+	case domain.BackendMiseGitHub:
+		return "github:" + pkg
 	case domain.BackendMiseNPM:
 		return "npm:" + pkg
 	default:

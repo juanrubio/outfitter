@@ -103,7 +103,7 @@ func TestMiseCommandsAcrossBackendsAndActions(t *testing.T) {
 				Package: "jdx/mise",
 			},
 			action:   domain.ActionInstall,
-			commands: []string{"mise use --global ubi:jdx/mise@latest"},
+			commands: []string{"mise use --global github:jdx/mise@latest"},
 		},
 		{
 			name: "npm install prepends node lts",
