@@ -725,6 +725,9 @@ func TestPlanEmptyStateAndHelp(t *testing.T) {
 	if !strings.Contains(m.View().Content, "No pending changes in your plan.") {
 		t.Fatal("empty plan state is missing")
 	}
+	if strings.Contains(m.View().Content, "Remove strays") {
+		t.Fatal("plan footer must not offer stray removal when the plan has no strays")
+	}
 	pressKey(m, tea.KeyEscape, "")
 	pressKey(m, '?', "?")
 	if m.view != "help" {

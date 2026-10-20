@@ -111,6 +111,94 @@ func TestRunnerStreamsOutputAndWritesStructuredLog(t *testing.T) {
 	}
 }
 
+// TestRunnerRemoveStraysOnlyForSucceededSteps verifies the opt-in stray
+// phase: strays of succeeded steps are deleted and reported, strays of
+// failed steps are left alone.
+func TestRunnerRemoveStraysOnlyForSucceededSteps(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	strayOK := filepath.Join(home, "old-lazygit")
+	strayFail := filepath.Join(home, "old-fzf")
+	writeTestFile(t, strayOK, "binary", 0o755)
+	writeTestFile(t, strayFail, "binary", 0o755)
+
+	executor := CommandExecutorFunc(func(
+		_ context.Context, spec adapter.CommandSpec, _ func(string),
+	) (int, error) {
+		if strings.Contains(spec.Display, "fail-tool") {
+			return 1, errors.New("boom")
+		}
+		return 0, nil
+	})
+	runner := NewRunner(RunnerOptions{
+		HomeDir: home, LogDir: t.TempDir(), CommandExecutor: executor,
+		LookPath: func(string) (string, error) { return "/usr/bin/mise", nil },
+	})
+
+	okStep := domain.PlanStep{
+		Tool: vendorTool("lazygit", "true"), Action: domain.ActionUpdate,
+		Command: "true", Migrate: true, StrayBinaryPath: strayOK,
+	}
+	failStep := domain.PlanStep{
+		Tool: vendorTool("fail-tool", "fail-tool"), Action: domain.ActionUpdate,
+		Command: "fail-tool", Migrate: true, StrayBinaryPath: strayFail,
+	}
+	plan := domain.ActionPlan{
+		Updates:      []domain.PlanStep{okStep, failStep},
+		RemoveStrays: true,
+	}
+
+	var events []StepEvent
+	result := runner.Run(context.Background(), plan, func(event StepEvent) {
+		events = append(events, event)
+	})
+	// The stray phase runs after the step finished: its line events must
+	// repeat the terminal status, never resurrect the step as running.
+	seenDone := false
+	strayLineStatus := ""
+	for _, event := range events {
+		if event.StepIndex != 0 {
+			continue
+		}
+		if event.Status == string(StepStatusDone) && event.Line == "" {
+			seenDone = true
+			continue
+		}
+		if seenDone && event.Status == string(StepStatusRunning) {
+			t.Fatalf("step 0 emitted running event after done: %+v", event)
+		}
+		if strings.Contains(event.Line, "Removed stray binary") {
+			strayLineStatus = event.Status
+		}
+	}
+	if strayLineStatus != string(StepStatusDone) {
+		t.Fatalf("stray line event status = %q, want done", strayLineStatus)
+	}
+	if len(result.Strays) != 1 {
+		t.Fatalf("stray results = %+v, want exactly the succeeded step's stray", result.Strays)
+	}
+	if !result.Strays[0].Removed || result.Strays[0].Path != strayOK || result.Strays[0].ToolID != "lazygit" {
+		t.Fatalf("stray result = %+v", result.Strays[0])
+	}
+	if _, err := os.Stat(strayOK); !os.IsNotExist(err) {
+		t.Errorf("succeeded step's stray still exists (stat err = %v)", err)
+	}
+	if _, err := os.Stat(strayFail); err != nil {
+		t.Errorf("failed step's stray must remain: %v", err)
+	}
+
+	// Without the opt-in, strays are never touched.
+	writeTestFile(t, strayOK, "binary", 0o755)
+	plan.RemoveStrays = false
+	result = runner.Run(context.Background(), plan, nil)
+	if len(result.Strays) != 0 {
+		t.Fatalf("strays without opt-in = %+v, want none", result.Strays)
+	}
+	if _, err := os.Stat(strayOK); err != nil {
+		t.Errorf("stray removed without opt-in: %v", err)
+	}
+}
+
 func TestRunnerIsolatesPerToolFailures(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()

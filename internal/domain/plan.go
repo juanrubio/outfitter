@@ -135,6 +135,10 @@ type ActionPlan struct {
 	Installations []PlanStep `json:"installations"`
 	Updates       []PlanStep `json:"updates"`
 	Removals      []PlanStep `json:"removals"`
+	// RemoveStrays opts in to deleting stray binaries (steps'
+	// StrayBinaryPath) after their steps succeed. Off by default;
+	// callers set it from an explicit user choice.
+	RemoveStrays bool `json:"remove_strays,omitempty"`
 }
 
 // NeedsSudo reports whether any step requires elevated privileges.
@@ -143,8 +147,23 @@ func (p ActionPlan) NeedsSudo() bool {
 		if step.Sudo {
 			return true
 		}
+		if p.RemoveStrays && step.StrayBinaryPath != "" && RemovalNeedsSudo(step.StrayBinaryPath) {
+			return true
+		}
 	}
 	return false
+}
+
+// StraySteps returns the steps whose stray binaries the plan knows
+// about, in execution order.
+func (p ActionPlan) StraySteps() []PlanStep {
+	var strays []PlanStep
+	for _, step := range p.Steps() {
+		if step.StrayBinaryPath != "" {
+			strays = append(strays, step)
+		}
+	}
+	return strays
 }
 
 // TotalSteps returns the number of executable steps, including a bootstrap.

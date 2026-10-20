@@ -158,6 +158,7 @@ type Model struct {
 	shellWarning       string
 	onFixShell         func() (string, error)
 	confirmShadowSweep bool
+	removeStrays       bool
 	pendingShadowSweep bool
 	onRemoveShadows    func(paths []string) (removed []string, err error)
 	activeProfileID    string
@@ -657,6 +658,18 @@ func (m *Model) updatePlanKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.view = "catalog"
 	case "enter", "y":
 		return m.beginExecution()
+	case "s":
+		if len(m.plan.StraySteps()) == 0 {
+			m.notice = "No stray binaries in this plan"
+		} else {
+			m.removeStrays = !m.removeStrays
+			m.rebuildPlan()
+			if m.removeStrays {
+				m.notice = "Stray binaries will be removed after applying"
+			} else {
+				m.notice = "Stray binaries will be kept"
+			}
+		}
 	case "u":
 		m.queueAllUpdates()
 	}
@@ -1100,6 +1113,7 @@ func (m *Model) rebuildPlan() {
 		actions["mise"] = domain.ActionInstall
 	}
 	m.plan = domain.BuildActionPlan(m.catalog.Tools, m.states, actions, m.miseInstalled, m.miseVersion)
+	m.plan.RemoveStrays = m.removeStrays
 }
 
 func (m *Model) startExecution() {
@@ -1241,13 +1255,42 @@ func (m *Model) finishLiveExecution(result engine.PlanResult) {
 	m.liveResult = &result
 	m.lastLogPath = result.LogPath
 	m.execCancel = nil
+	m.removeStrays = false
+
+	straySuffix := ""
+	removedStrays, failedStrays := 0, 0
+	for _, stray := range result.Strays {
+		if stray.Removed {
+			removedStrays++
+			for id, state := range m.states {
+				if state.ShadowedBy == stray.Path {
+					state.ShadowedBy = ""
+					state.ShadowVersion = ""
+					m.states[id] = state
+				}
+			}
+		} else {
+			failedStrays++
+		}
+	}
+	if removedStrays > 0 {
+		noun := "strays"
+		if removedStrays == 1 {
+			noun = "stray"
+		}
+		straySuffix += fmt.Sprintf(" · removed %d %s", removedStrays, noun)
+	}
+	if failedStrays > 0 {
+		straySuffix += fmt.Sprintf(" · %d stray removals failed", failedStrays)
+	}
+
 	if result.LogPath != "" {
-		m.notice = fmt.Sprintf("Execution finished: %d succeeded, %d failed · log %s",
-			result.Succeeded(), result.Failed(), result.LogPath)
+		m.notice = fmt.Sprintf("Execution finished: %d succeeded, %d failed%s · log %s",
+			result.Succeeded(), result.Failed(), straySuffix, result.LogPath)
 		return
 	}
-	m.notice = fmt.Sprintf("Execution finished: %d succeeded, %d failed",
-		result.Succeeded(), result.Failed())
+	m.notice = fmt.Sprintf("Execution finished: %d succeeded, %d failed%s",
+		result.Succeeded(), result.Failed(), straySuffix)
 }
 
 func (m *Model) cancelExecution() {
@@ -1447,7 +1490,12 @@ func (m *Model) applyStepProgress(msg StepProgressMsg) {
 	}
 	step := &m.execSteps[msg.Index]
 	if msg.Status != "" {
-		step.status = msg.Status
+		// Terminal steps never regress: late line events (e.g. stray
+		// removals after a step finished) only append logs.
+		terminal := step.status == StepDone || step.status == StepFailed
+		if !terminal || msg.Status != StepRunning {
+			step.status = msg.Status
+		}
 	}
 	if msg.Elapsed != "" {
 		step.elapsed = msg.Elapsed

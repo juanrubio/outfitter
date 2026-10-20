@@ -10,7 +10,7 @@ import (
 )
 
 func newInstallCmd(opts *options) *cobra.Command {
-	var dryRun, yes, jsonOut bool
+	var dryRun, yes, jsonOut, removeStrays bool
 	cmd := &cobra.Command{
 		Use:   "install <tool-id>...",
 		Short: "Install specific tools",
@@ -46,18 +46,19 @@ func newInstallCmd(opts *options) *cobra.Command {
 				}
 			}
 			return executeMutation(cmd, opts, cat, states, actions, mutationOptions{
-				DryRun: dryRun,
-				Yes:    yes,
-				JSON:   jsonOut,
+				DryRun:       dryRun,
+				Yes:          yes,
+				JSON:         jsonOut,
+				RemoveStrays: removeStrays,
 			})
 		},
 	}
-	addMutationFlags(cmd, &dryRun, &yes, &jsonOut)
+	addMutationFlags(cmd, &dryRun, &yes, &jsonOut, &removeStrays)
 	return cmd
 }
 
 func newUpdateCmd(opts *options) *cobra.Command {
-	var dryRun, yes, jsonOut, all bool
+	var dryRun, yes, jsonOut, all, removeStrays bool
 	cmd := &cobra.Command{
 		Use:   "update [<tool-id>...]",
 		Short: "Update outdated tools",
@@ -93,19 +94,20 @@ func newUpdateCmd(opts *options) *cobra.Command {
 				}
 			}
 			return executeMutation(cmd, opts, cat, states, actions, mutationOptions{
-				DryRun: dryRun,
-				Yes:    yes,
-				JSON:   jsonOut,
+				DryRun:       dryRun,
+				Yes:          yes,
+				JSON:         jsonOut,
+				RemoveStrays: removeStrays,
 			})
 		},
 	}
-	addMutationFlags(cmd, &dryRun, &yes, &jsonOut)
+	addMutationFlags(cmd, &dryRun, &yes, &jsonOut, &removeStrays)
 	cmd.Flags().BoolVar(&all, "all", false, "update every installed and outdated tool")
 	return cmd
 }
 
 func newRemoveCmd(opts *options) *cobra.Command {
-	var dryRun, yes, jsonOut bool
+	var dryRun, yes, jsonOut, removeStrays bool
 	cmd := &cobra.Command{
 		Use:   "remove <tool-id>...",
 		Short: "Uninstall specific tools",
@@ -134,20 +136,22 @@ func newRemoveCmd(opts *options) *cobra.Command {
 				actions[tool.ID] = domain.ActionRemove
 			}
 			return executeMutation(cmd, opts, cat, states, actions, mutationOptions{
-				DryRun: dryRun,
-				Yes:    yes,
-				JSON:   jsonOut,
+				DryRun:       dryRun,
+				Yes:          yes,
+				JSON:         jsonOut,
+				RemoveStrays: removeStrays,
 			})
 		},
 	}
-	addMutationFlags(cmd, &dryRun, &yes, &jsonOut)
+	addMutationFlags(cmd, &dryRun, &yes, &jsonOut, &removeStrays)
 	return cmd
 }
 
-func addMutationFlags(cmd *cobra.Command, dryRun, yes, jsonOut *bool) {
+func addMutationFlags(cmd *cobra.Command, dryRun, yes, jsonOut, removeStrays *bool) {
 	cmd.Flags().BoolVar(dryRun, "dry-run", false, "print the execution plan without running it")
 	cmd.Flags().BoolVar(yes, "yes", false, "confirm execution without prompting")
 	cmd.Flags().BoolVar(jsonOut, "json", false, "emit machine-readable JSON")
+	cmd.Flags().BoolVar(removeStrays, "remove-strays", false, "also delete stray binaries left behind by migrating updates")
 }
 
 func validateTools(cat *catalog.Catalog, ids []string) ([]domain.Tool, error) {

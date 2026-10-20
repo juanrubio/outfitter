@@ -563,6 +563,65 @@ func unintegratedShellDeps(t *testing.T) Deps {
 // never presents the backend's no-op remove command: an external binary
 // is deleted directly, and an install owned by another manager is
 // blocked with an explanation.
+// TestUpdateRemoveStraysFlag verifies --remove-strays turns stray
+// warnings into planned removals and reports their outcomes.
+func TestUpdateRemoveStraysFlag(t *testing.T) {
+	deps, _ := testDeps(t)
+	baseInspect := deps.InspectLocal
+	deps.InspectLocal = func(ctx context.Context, cat *catalog.Catalog) map[string]domain.ToolState {
+		states := baseInspect(ctx, cat)
+		states["dust"] = domain.ToolState{
+			InstalledVersion: "1.2.4",
+			LatestVersion:    "1.2.6",
+			BinaryPath:       "/usr/bin/dust",
+			Provenance:       domain.ProvenanceExternal,
+			CheckStatus:      domain.StatusReady,
+		}
+		return states
+	}
+
+	out, err := runCLI(t, deps, "update", "dust", "--dry-run", "--remove-strays")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "will remove stray after update: $ sudo rm /usr/bin/dust") {
+		t.Errorf("dry-run missing opted-in stray removal:\n%s", out)
+	}
+	if strings.Contains(out, "stays on disk") {
+		t.Errorf("opted-in dry-run must not use warning wording:\n%s", out)
+	}
+
+	out, err = runCLI(t, deps, "update", "dust", "--dry-run", "--remove-strays", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plan domain.ActionPlan
+	if err := json.Unmarshal([]byte(out), &plan); err != nil {
+		t.Fatal(err)
+	}
+	if !plan.RemoveStrays {
+		t.Fatalf("plan JSON RemoveStrays = false:\n%s", out)
+	}
+
+	deps.RunPlan = func(_ context.Context, plan domain.ActionPlan, _ func(engine.StepEvent)) engine.PlanResult {
+		result := successfulRun(plan)
+		result.Strays = []engine.StrayResult{
+			{ToolID: "dust", Path: "/usr/bin/dust", Removed: true},
+		}
+		return result
+	}
+	out, err = runCLI(t, deps, "update", "dust", "--yes", "--remove-strays")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "✓ removed /usr/bin/dust") {
+		t.Errorf("result summary missing stray outcome:\n%s", out)
+	}
+	if strings.Contains(out, "left behind") {
+		t.Errorf("removed strays must not be reported as left behind:\n%s", out)
+	}
+}
+
 func TestRemoveUnmanagedDryRun(t *testing.T) {
 	deps, _ := testDeps(t)
 	baseInspect := deps.InspectLocal

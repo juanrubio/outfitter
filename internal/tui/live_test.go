@@ -2,12 +2,15 @@ package tui
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/juanrubio/outfitter/internal/adapter"
 	"github.com/juanrubio/outfitter/internal/catalog"
 	"github.com/juanrubio/outfitter/internal/domain"
 	"github.com/juanrubio/outfitter/internal/engine"
@@ -118,6 +121,211 @@ func TestLiveExecutionUsesInjectedRunner(t *testing.T) {
 	}
 	if !strings.Contains(updated.notice, "1 succeeded") {
 		t.Fatalf("notice = %q", updated.notice)
+	}
+}
+
+// TestPlanStrayRemovalToggle verifies [s] in the plan review opts in to
+// stray removal: the plan handed to the executor carries RemoveStrays,
+// and the finish notice reports the removed strays.
+func TestPlanStrayRemovalToggle(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var executedPlan domain.ActionPlan
+	executor := func(
+		_ context.Context, plan domain.ActionPlan, _ func(engine.StepEvent),
+	) engine.PlanResult {
+		executedPlan = plan
+		steps := plan.Steps()
+		results := make([]engine.StepResult, 0, len(steps))
+		for _, step := range steps {
+			results = append(results, engine.StepResult{Step: step, Success: true})
+		}
+		return engine.PlanResult{
+			StartedAt: time.Now(), FinishedAt: time.Now(),
+			Steps: results,
+			Strays: []engine.StrayResult{
+				{ToolID: "lazygit", Path: "/home/test/old/lazygit", Removed: true},
+			},
+			LogPath: "/tmp/outfitter-run.log",
+		}
+	}
+
+	m, err := NewModel(Options{
+		Catalog: cat,
+		Width:   120,
+		Height:  40,
+		States: map[string]domain.ToolState{
+			"lazygit": {
+				InstalledVersion: "0.66.1", LatestVersion: "0.66.2",
+				BinaryPath: "/home/test/old/lazygit", Provenance: domain.ProvenanceExternal,
+			},
+		},
+		Actions:       map[string]domain.DesiredAction{"lazygit": domain.ActionUpdate},
+		MiseInstalled: true,
+		OnExecute:     executor,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.plan.RemoveStrays {
+		t.Fatal("RemoveStrays must default to off")
+	}
+
+	pressKey(m, 'a', "a")
+	if m.view != "plan" {
+		t.Fatalf("view = %q, want plan", m.view)
+	}
+	for _, marker := range []string{"s Remove strays: off", "STRAY BINARIES (⚠1) — left in place"} {
+		if !strings.Contains(m.View().Content, marker) {
+			t.Fatalf("plan screen missing %q:\n%s", marker, m.View().Content)
+		}
+	}
+	if strings.Contains(m.View().Content, "[s] also remove") {
+		t.Fatalf("plan screen still shows inline [s] hint outside footer:\n%s", m.View().Content)
+	}
+
+	pressKey(m, 's', "s")
+	if !m.plan.RemoveStrays {
+		t.Fatal("plan.RemoveStrays = false after [s]")
+	}
+	for _, marker := range []string{"s Remove strays: on", "STRAY BINARIES (⚠1) — will remove after applying"} {
+		if !strings.Contains(m.View().Content, marker) {
+			t.Fatalf("plan screen missing %q:\n%s", marker, m.View().Content)
+		}
+	}
+
+	model, cmd := m.beginExecution()
+	updated, ok := model.(*Model)
+	if !ok {
+		t.Fatalf("beginExecution returned %T", model)
+	}
+	drainCommands(t, updated, cmd)
+	if !executedPlan.RemoveStrays {
+		t.Fatal("executed plan did not carry RemoveStrays")
+	}
+	if !strings.Contains(updated.notice, "removed 1 stray") {
+		t.Fatalf("notice = %q, want stray removal summary", updated.notice)
+	}
+	if updated.removeStrays {
+		t.Fatal("removeStrays toggle must reset after execution")
+	}
+}
+
+// TestLiveEventNeverRegressesTerminalStep covers the stray phase emitting
+// line events for a step that already finished: the step must stay done
+// so overall progress can reach 100%.
+func TestLiveEventNeverRegressesTerminalStep(t *testing.T) {
+	step := domain.PlanStep{Tool: domain.Tool{Name: "Lazygit"}}
+	m := &Model{execSteps: []executionStep{{step: step, status: StepRunning}}}
+
+	m.applyLiveEvent(engine.StepEvent{
+		StepIndex: 0, Step: step,
+		Status: string(engine.StepStatusDone), Duration: 1300 * time.Millisecond,
+	})
+	m.applyLiveEvent(engine.StepEvent{
+		StepIndex: 0, Step: step,
+		Status: string(engine.StepStatusRunning),
+		Line:   "Removed stray binary /home/test/old/lazygit",
+	})
+
+	got := m.execSteps[0]
+	if got.status != StepDone {
+		t.Fatalf("status = %q, want done after late running line event", got.status)
+	}
+	if got.elapsed == "" {
+		t.Fatal("elapsed must survive the late line event")
+	}
+	found := false
+	for _, line := range got.logs {
+		if strings.Contains(line, "Removed stray binary") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("stray line missing from step logs: %v", got.logs)
+	}
+	done, total, _ := m.executionCounts()
+	if done != 1 || total != 1 {
+		t.Fatalf("executionCounts = %d/%d, want 1/1", done, total)
+	}
+}
+
+// TestLiveStrayRunReachesFullProgress drives the real engine Runner
+// (fake command executor, real stray file) through the TUI: after the
+// stray phase every step must read done so progress reaches 100%.
+func TestLiveStrayRunReachesFullProgress(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	strayPath := filepath.Join(home, "old", "lazygit")
+	if err := os.MkdirAll(filepath.Dir(strayPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(strayPath, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := engine.NewRunner(engine.RunnerOptions{
+		HomeDir: home,
+		LogDir:  t.TempDir(),
+		CommandExecutor: engine.CommandExecutorFunc(func(
+			_ context.Context, spec adapter.CommandSpec, onLine func(string),
+		) (int, error) {
+			onLine("installed " + spec.Display)
+			return 0, nil
+		}),
+		LookPath: func(string) (string, error) { return "/usr/bin/mise", nil },
+	})
+
+	m, err := NewModel(Options{
+		Catalog: cat,
+		Width:   120,
+		Height:  40,
+		States: map[string]domain.ToolState{
+			"lazygit": {
+				InstalledVersion: "0.66.1", LatestVersion: "0.66.2",
+				BinaryPath: strayPath, Provenance: domain.ProvenanceExternal,
+			},
+		},
+		Actions:       map[string]domain.DesiredAction{"lazygit": domain.ActionUpdate},
+		MiseInstalled: true,
+		OnExecute: func(ctx context.Context, plan domain.ActionPlan, onEvent func(engine.StepEvent)) engine.PlanResult {
+			return runner.Run(ctx, plan, onEvent)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pressKey(m, 'a', "a")
+	pressKey(m, 's', "s")
+	model, cmd := m.beginExecution()
+	updated, ok := model.(*Model)
+	if !ok {
+		t.Fatalf("beginExecution returned %T", model)
+	}
+	drainCommands(t, updated, cmd)
+
+	done, total, failed := updated.executionCounts()
+	if total == 0 || done != total || failed != 0 {
+		t.Fatalf("counts = (%d, %d, %d), want all done", done, total, failed)
+	}
+	for _, step := range updated.execSteps {
+		if step.status != StepDone {
+			t.Fatalf("step %s status = %q, want done", step.step.Tool.ID, step.status)
+		}
+	}
+	if _, err := os.Stat(strayPath); !os.IsNotExist(err) {
+		t.Fatalf("stray still exists after run (stat err = %v)", err)
+	}
+	if !strings.Contains(updated.notice, "removed 1 stray") {
+		t.Fatalf("notice = %q, want stray removal summary", updated.notice)
 	}
 }
 

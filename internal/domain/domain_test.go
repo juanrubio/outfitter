@@ -478,6 +478,30 @@ func TestDiscoveredRemovalCommandFlowsToPlan(t *testing.T) {
 	}
 }
 
+// TestActionPlanNeedsSudoCoversStrayRemoval verifies the sudo pre-flight
+// also triggers for opted-in stray removals in system directories.
+func TestActionPlanNeedsSudoCoversStrayRemoval(t *testing.T) {
+	step := domain.PlanStep{
+		Tool:            domain.Tool{ID: "lazygit"},
+		Action:          domain.ActionUpdate,
+		StrayBinaryPath: "/usr/local/bin/lazygit",
+	}
+	plan := domain.ActionPlan{Updates: []domain.PlanStep{step}}
+	if plan.NeedsSudo() {
+		t.Fatal("NeedsSudo = true without the stray opt-in")
+	}
+	plan.RemoveStrays = true
+	if !plan.NeedsSudo() {
+		t.Fatal("NeedsSudo = false with a system-path stray opt-in")
+	}
+
+	step.StrayBinaryPath = "/home/u/.local/bin/lazygit"
+	plan = domain.ActionPlan{Updates: []domain.PlanStep{step}, RemoveStrays: true}
+	if plan.NeedsSudo() {
+		t.Fatal("NeedsSudo = true for a user-owned stray")
+	}
+}
+
 func TestBuildActionPlanRemoveUnmanaged(t *testing.T) {
 	tests := []struct {
 		name        string

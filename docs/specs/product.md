@@ -204,8 +204,8 @@ outfitter check [--json]                   # Check upstream registries for avail
 outfitter doctor [--fix] [--shims] [--dry-run] [--yes] [--json]  # Diagnose/fix mise shell integration (bash/zsh)
 outfitter profile list                     # List built-in and custom profiles
 outfitter profile apply <name> [--dry-run] [--yes]  # Install all tools in a profile (e.g., server, desktop)
-outfitter install <tool-id>... [--dry-run] [--yes]  # Install specific tools
-outfitter update [<tool-id>...] [--all] [--dry-run] [--yes]  # Bulk-update outdated tools
+outfitter install <tool-id>... [--dry-run] [--yes] [--remove-strays]  # Install specific tools
+outfitter update [<tool-id>...] [--all] [--dry-run] [--yes] [--remove-strays]  # Bulk-update outdated tools
 outfitter remove <tool-id>... [--dry-run] [--yes]   # Uninstall specific tools
 outfitter catalog export > catalog.toml    # Export the built-in catalog as a template
 ```

@@ -17,9 +17,10 @@ import (
 )
 
 type mutationOptions struct {
-	DryRun bool
-	Yes    bool
-	JSON   bool
+	DryRun       bool
+	Yes          bool
+	JSON         bool
+	RemoveStrays bool
 }
 
 type jsonStepResult struct {
@@ -50,6 +51,7 @@ func executeMutation(
 ) error {
 	miseInstalled, miseVersion := opts.miseStatus()
 	plan := domain.BuildActionPlan(cat.Tools, states, actions, miseInstalled, miseVersion)
+	plan.RemoveStrays = mutation.RemoveStrays
 	out := cmd.OutOrStdout()
 
 	if mutation.DryRun {
@@ -177,12 +179,18 @@ func printPlan(w io.Writer, plan domain.ActionPlan) error {
 			return err
 		}
 		if step.StrayBinaryPath != "" {
-			if _, err := fmt.Fprintf(w, "       warning: unmanaged binary %s stays on disk and may shadow the managed %s install\n",
-				step.StrayBinaryPath, step.Tool.Backend); err != nil {
-				return err
-			}
-			if _, err := fmt.Fprintf(w, "       remove it after updating: $ %s\n", step.StrayRemovalCommand()); err != nil {
-				return err
+			if plan.RemoveStrays {
+				if _, err := fmt.Fprintf(w, "       will remove stray after update: $ %s\n", step.StrayRemovalCommand()); err != nil {
+					return err
+				}
+			} else {
+				if _, err := fmt.Fprintf(w, "       warning: unmanaged binary %s stays on disk and may shadow the managed %s install\n",
+					step.StrayBinaryPath, step.Tool.Backend); err != nil {
+					return err
+				}
+				if _, err := fmt.Fprintf(w, "       remove it after updating: $ %s\n", step.StrayRemovalCommand()); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -210,6 +218,21 @@ func printResult(w io.Writer, result engine.PlanResult) error {
 		if _, err := fmt.Fprintf(w, "Log: %s\n", result.LogPath); err != nil {
 			return err
 		}
+	}
+	if len(result.Strays) > 0 {
+		if _, err := fmt.Fprintln(w, "Stray binaries:"); err != nil {
+			return err
+		}
+		for _, stray := range result.Strays {
+			if stray.Removed {
+				if _, err := fmt.Fprintf(w, "  ✓ removed %s (%s)\n", stray.Path, stray.ToolID); err != nil {
+					return err
+				}
+			} else if _, err := fmt.Fprintf(w, "  ✗ %s (%s): %v\n", stray.Path, stray.ToolID, stray.Err); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	strays := make([]domain.PlanStep, 0, len(result.Steps))
 	for _, step := range result.Steps {

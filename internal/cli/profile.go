@@ -68,7 +68,7 @@ func newProfileListCmd(opts *options) *cobra.Command {
 }
 
 func newProfileApplyCmd(opts *options) *cobra.Command {
-	var dryRun, yes, jsonOut bool
+	var dryRun, yes, jsonOut, removeStrays bool
 	cmd := &cobra.Command{
 		Use:   "apply <name>",
 		Short: "Install missing tools and update outdated tools in a profile",
@@ -104,15 +104,17 @@ func newProfileApplyCmd(opts *options) *cobra.Command {
 				}
 			}
 			return executeMutation(cmd, opts, cat, states, actions, mutationOptions{
-				DryRun: dryRun,
-				Yes:    yes,
-				JSON:   jsonOut,
+				DryRun:       dryRun,
+				Yes:          yes,
+				JSON:         jsonOut,
+				RemoveStrays: removeStrays,
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the execution plan without running it")
 	cmd.Flags().BoolVar(&yes, "yes", false, "confirm execution without prompting")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit machine-readable JSON")
+	cmd.Flags().BoolVar(&removeStrays, "remove-strays", false, "also delete stray binaries left behind by migrating updates")
 	return cmd
 }
 

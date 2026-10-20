@@ -138,6 +138,7 @@ Pressing `a` opens the **Plan & Apply** confirmation screen before any command r
   5. **Removals (`-`)** — highlighted in rose with confirmation warning.
 - **`Enter` / `y`:** Starts execution and transitions to the **Live Execution Progress** view.
 - **`Esc` / `n`:** Returns to the catalog without running anything.
+- **`s`:** Toggles removing stray binaries (unmanaged copies left behind by migrating updates) after applying — off by default, per plan. Only strays of steps that succeed are removed.
 
 ### 4.4 Live Execution Progress View
 
@@ -176,6 +177,7 @@ When launched on a fresh Debian/Ubuntu machine where `~/.local/bin/mise` is not 
 | `S` | Global | Remove all shadowed binaries (confirmed; status bar shows `⚠ N shadowed` while any exist; sudo pre-flight for system paths) |
 | `c` | Global | View Catalog sources (`Embedded default` + `~/.config/outfitter/catalog.toml`) |
 | `Enter` | Compact / Plan | Open tool detail card (in `80×24` mode) or confirm Apply (in Plan modal) |
+| `s` | Plan modal | Toggle removing stray binaries after applying (opt-in per plan; succeeded steps only) |
 | `?` | Global | Toggle keyboard help overlay |
 | `q` | Global | Quit Outfitter (prompts for confirmation if a Pending Plan has unapplied changes) |
 

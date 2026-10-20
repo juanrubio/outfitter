@@ -29,7 +29,8 @@ const (
 )
 
 // StepEvent is emitted while a plan is executing. Line events carry one
-// streamed stdout/stderr line and repeat the running status.
+// streamed stdout/stderr line and repeat the step's current status —
+// the terminal status for post-step lines such as stray removals.
 type StepEvent struct {
 	StepIndex  int
 	TotalSteps int
@@ -51,12 +52,21 @@ type StepResult struct {
 	Err      error
 }
 
+// StrayResult is the outcome of one stray-binary removal.
+type StrayResult struct {
+	ToolID  string
+	Path    string
+	Removed bool
+	Err     error
+}
+
 // PlanResult is the complete outcome of one execution run.
 type PlanResult struct {
 	StartedAt  time.Time
 	FinishedAt time.Time
 	Duration   time.Duration
 	Steps      []StepResult
+	Strays     []StrayResult
 	LogPath    string
 }
 
@@ -240,6 +250,10 @@ func (r *Runner) Run(
 		}
 	}
 
+	if plan.RemoveStrays && ctx.Err() == nil {
+		result.Strays = r.removeStrays(result.Steps, len(steps), onEvent, logger)
+	}
+
 	result.FinishedAt = time.Now()
 	result.Duration = result.FinishedAt.Sub(result.StartedAt)
 	if logger != nil {
@@ -248,6 +262,67 @@ func (r *Runner) Run(
 			result.Duration.Round(time.Millisecond), result.Succeeded(), result.Failed())
 	}
 	return result
+}
+
+// removeStrays deletes the stray binaries of succeeded steps. A failed
+// step keeps its stray: it may be the only working copy left.
+func (r *Runner) removeStrays(
+	steps []StepResult, total int, onEvent func(StepEvent), logger *runLogger,
+) []StrayResult {
+	type pending struct {
+		index    int
+		step     domain.PlanStep
+		duration time.Duration
+	}
+	var pendingStrays []pending
+	var paths []string
+	for index, recorded := range steps {
+		if recorded.Success && recorded.Step.StrayBinaryPath != "" {
+			pendingStrays = append(pendingStrays, pending{index, recorded.Step, recorded.Duration})
+			paths = append(paths, recorded.Step.StrayBinaryPath)
+		}
+	}
+	if len(paths) == 0 {
+		return nil
+	}
+
+	removed, removeErr := RemoveShadowedBinaries(paths)
+	gone := make(map[string]bool, len(removed))
+	for _, path := range removed {
+		gone[path] = true
+	}
+
+	results := make([]StrayResult, 0, len(pendingStrays))
+	for _, stray := range pendingStrays {
+		outcome := StrayResult{
+			ToolID:  stray.step.Tool.ID,
+			Path:    stray.step.StrayBinaryPath,
+			Removed: gone[stray.step.StrayBinaryPath],
+		}
+		var line string
+		if outcome.Removed {
+			line = "Removed stray binary " + outcome.Path
+		} else {
+			outcome.Err = removeErr
+			line = fmt.Sprintf("Failed to remove stray binary %s: %v", outcome.Path, removeErr)
+		}
+		results = append(results, outcome)
+		// The step already finished: repeat its terminal status and
+		// duration so consumers never resurrect it as running.
+		emitStepEvent(onEvent, StepEvent{
+			StepIndex:  stray.index,
+			TotalSteps: total,
+			Step:       stray.step,
+			Status:     string(StepStatusDone),
+			Line:       line,
+			Duration:   stray.duration,
+			Err:        outcome.Err,
+		})
+		if logger != nil {
+			logger.Line("stray tool=%s path=%s removed=%v", outcome.ToolID, outcome.Path, outcome.Removed)
+		}
+	}
+	return results
 }
 
 func (r *Runner) runBootstrap(

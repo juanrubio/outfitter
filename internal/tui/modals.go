@@ -133,7 +133,15 @@ func (m *Model) renderPlanScreen() []string {
 	for _, line := range box {
 		lines = append(lines, m.screenLineText(line, m.width))
 	}
-	lines = append(lines, m.footerLines("Enter Execute plan   u Queue all updates   Esc Return to catalog", "")...)
+	hint := "Enter Execute plan   u Queue all updates   Esc Return to catalog"
+	if len(m.plan.StraySteps()) > 0 {
+		strayState := "off"
+		if m.plan.RemoveStrays {
+			strayState = "on"
+		}
+		hint = "Enter Execute plan   s Remove strays: " + strayState + "   u Queue all updates   Esc Return to catalog"
+	}
+	lines = append(lines, m.footerLines(hint, "")...)
 	return lines
 }
 
@@ -161,8 +169,14 @@ func (m *Model) planReviewBox(width, height int) []string {
 		if m.plan.NeedsSudo() {
 			sudoNote = "[sudo required for apt]"
 		}
+		summary := fmt.Sprintf("Summary: +%d install · ↑%d update · -%d remove · %s", installs, updates, removals, sudoNote)
+		if m.plan.RemoveStrays {
+			if n := len(m.plan.StraySteps()); n > 0 {
+				summary += fmt.Sprintf(" · ⚠ removing %d strays", n)
+			}
+		}
 		content = append(content,
-			[]span{{text: fmt.Sprintf("Summary: +%d install · ↑%d update · -%d remove · %s", installs, updates, removals, sudoNote), token: "text", bold: true}},
+			[]span{{text: summary, token: "text", bold: true}},
 			nil,
 		)
 
@@ -240,15 +254,21 @@ func appendStraySection(content [][]span, plan domain.ActionPlan, innerWidth int
 	if len(strays) == 0 {
 		return content
 	}
+	header := fmt.Sprintf("STRAY BINARIES (⚠%d) — left in place", len(strays))
+	removeVerb := "remove after applying"
+	if plan.RemoveStrays {
+		header = fmt.Sprintf("STRAY BINARIES (⚠%d) — will remove after applying", len(strays))
+		removeVerb = "will remove after applying"
+	}
 	content = append(content,
-		[]span{{text: fmt.Sprintf("STRAY BINARIES (⚠%d)", len(strays)), token: "low", bold: true}},
+		[]span{{text: header, token: "low", bold: true}},
 	)
 	for _, step := range strays {
 		warning := fmt.Sprintf("⚠ %s: %s is not managed by %s and may shadow the update",
 			step.Tool.Name, step.StrayBinaryPath, step.Tool.Backend)
 		content = append(content,
 			[]span{{text: truncateDisplay(warning, innerWidth), token: "low"}},
-			[]span{{text: truncateDisplay("  remove after applying: $ "+step.StrayRemovalCommand(), innerWidth), token: "text"}},
+			[]span{{text: truncateDisplay("  "+removeVerb+": $ "+step.StrayRemovalCommand(), innerWidth), token: "text"}},
 		)
 	}
 	content = append(content, nil)
