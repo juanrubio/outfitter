@@ -146,6 +146,8 @@ type Model struct {
 
 	selected           string
 	collapsed          map[string]bool
+	collapseStack      []string
+	collapseAnchor     string
 	view               string
 	scrollOffset       int
 	plan               domain.ActionPlan
@@ -779,19 +781,36 @@ func (m *Model) moveSelection(delta int) {
 	m.selected = ids[index]
 }
 
-func (m *Model) jumpToCategory(num int) {
+// expandCategory reopens a collapsed category, drops it from the Tab
+// stack, and selects its first visible tool when one matches.
+func (m *Model) expandCategory(id string) {
+	m.collapsed[id] = false
+	for index, stacked := range m.collapseStack {
+		if stacked == id {
+			m.collapseStack = append(m.collapseStack[:index], m.collapseStack[index+1:]...)
+			break
+		}
+	}
 	for _, category := range m.catalog.Categories {
-		if category.Num != num {
+		if category.ID != id {
 			continue
 		}
-		m.collapsed[category.ID] = false
 		for _, tool := range m.catalog.ToolsByCategory(category.ID) {
 			if m.toolMatches(tool) {
 				m.selected = tool.ID
 				return
 			}
 		}
-		return
+	}
+}
+
+func (m *Model) jumpToCategory(num int) {
+	m.collapseAnchor = ""
+	for _, category := range m.catalog.Categories {
+		if category.Num == num {
+			m.expandCategory(category.ID)
+			return
+		}
 	}
 }
 
@@ -814,15 +833,29 @@ func (m *Model) toggleSelected() {
 	m.ensureSelection()
 }
 
+// toggleFocusedCategory implements the Tab stack: Tab collapses the
+// focused category and pushes it on a stack; pressing Tab again before
+// navigating away pops the stack and reopens the most recently
+// collapsed category (LIFO). Navigating away (selection moved off the
+// collapse anchor) disarms the pop, so Tab collapses the newly focused
+// category instead.
 func (m *Model) toggleFocusedCategory() {
+	if top := len(m.collapseStack) - 1; top >= 0 && m.collapseAnchor != "" && m.selected == m.collapseAnchor {
+		id := m.collapseStack[top]
+		m.collapseStack = m.collapseStack[:top]
+		m.collapseAnchor = ""
+		m.expandCategory(id)
+		m.ensureSelection()
+		return
+	}
 	tool, ok := m.selectedTool()
 	if !ok {
 		return
 	}
-	m.collapsed[tool.CategoryID] = !m.collapsed[tool.CategoryID]
-	if m.collapsed[tool.CategoryID] {
-		m.selected = m.firstVisibleToolID()
-	}
+	m.collapsed[tool.CategoryID] = true
+	m.collapseStack = append(m.collapseStack, tool.CategoryID)
+	m.selected = m.firstVisibleToolID()
+	m.collapseAnchor = m.selected
 	m.ensureSelection()
 }
 

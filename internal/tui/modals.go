@@ -477,7 +477,7 @@ func (m *Model) helpBox(width, height int) []string {
 		{"↑ / ↓ or j / k", "Move selection between tools in the catalog"},
 		{"PgUp / PgDn", "Page selection by ten tools"},
 		{"1 / 2 / 3 / 4", "Jump to Category 1 (Harnesses), 2 (AI TUIs), 3 (Terminal), 4 (Utilities)"},
-		{"Tab", "Collapse or expand the currently focused category"},
+		{"Tab", "Collapse focused category; Tab again reopens the last collapsed (stack)"},
 		{"Space", "Toggle desired action for selected tool ([ ] ↔ [+], [!] → [↑] → [-], [✓] ↔ [-])"},
 		{"u", "Queue updates ([↑]) for ALL outdated tools in the catalog at once"},
 		{"i / + / U", "Queue install ([+]) or update ([↑]) for the focused tool"},

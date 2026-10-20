@@ -113,7 +113,7 @@ Every tool has an **Installed State** on disk and a **Desired State** in the TUI
 | `[-]` | `error` (Rose) | Installed; queued for uninstall in Pending Plan | Restores back to `[✓]` |
 
 - Pressing `u` (**Queue all updates**) turns every `[!]` outdated tool into `[↑]` in one keystroke (or Pressing `U` queues an immediate update for only the currently focused tool).
-- Pressing `g` (**Toggle group**) toggles selection for all tools in the focused category (`1`–`4` also jump directly to categories 1–4; `Tab` collapses/expands the current category).
+- Pressing `g` (**Toggle group**) toggles selection for all tools in the focused category (`1`–`4` also jump directly to categories 1–4; `Tab` collapses the current category and pressing it again reopens the last collapsed one).
 - Pressing `x` (**Reset plan**) discards all queued `[+]`, `[↑]`, `[-]` changes and restores the view to current disk state.
 
 ### 4.2 Profile Selector Modal (`p`)
@@ -162,7 +162,7 @@ When launched on a fresh Debian/Ubuntu machine where `~/.local/bin/mise` is not 
 | :--- | :--- | :--- |
 | `↑` / `↓` or `j` / `k` | Catalog list | Move selection between tools |
 | `1` / `2` / `3` / `4` | Catalog list | Jump to Category 1 (Harnesses), 2 (AI TUIs), 3 (Terminal), 4 (Utilities) |
-| `Tab` | Catalog list | Collapse / expand the current category |
+| `Tab` | Catalog list | Collapse the focused category; pressing Tab again before navigating reopens the most recently collapsed category (LIFO stack). Number keys `1`–`4` also expand and jump to a category |
 | `Space` | Catalog list | Toggle selected tool (`[ ]` ↔ `[+]`, `[!]` → `[↑]` → `[-]`, `[✓]` ↔ `[-]`) |
 | `u` | Global | Queue updates (`[↑]`) for **all** outdated tools |
 | `U` | Catalog list | Queue update (`[↑]`) for the currently focused tool only |

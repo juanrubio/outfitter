@@ -237,6 +237,42 @@ func TestCategoryJumpsAndTabCollapse(t *testing.T) {
 	if m.selected == "claude-code" {
 		t.Fatal("selection remained inside a collapsed category")
 	}
+
+	// Tab stack: pressing Tab again (without navigating away) reopens
+	// the group just collapsed and returns focus to it.
+	pressKey(m, tea.KeyTab, "")
+	if m.collapsed["harnesses"] {
+		t.Fatal("second Tab did not reopen the collapsed category")
+	}
+	if m.selected != "claude-code" {
+		t.Fatalf("reopen selected %q, want claude-code", m.selected)
+	}
+
+	// Navigating away disarms the stack: Tab collapses the newly
+	// focused category instead of reopening the stacked one.
+	pressKey(m, tea.KeyTab, "")
+	if !m.collapsed["harnesses"] {
+		t.Fatal("Tab did not re-collapse harnesses")
+	}
+	pressKey(m, '3', "3")
+	if m.selected != "tmux" {
+		t.Fatalf("3 selected %q, want tmux", m.selected)
+	}
+	pressKey(m, tea.KeyTab, "")
+	if !m.collapsed["terminal"] {
+		t.Fatal("Tab after jumping should collapse terminal, not reopen harnesses")
+	}
+	// The stack is LIFO: the next Tab reopens terminal first.
+	pressKey(m, tea.KeyTab, "")
+	if m.collapsed["terminal"] {
+		t.Fatal("Tab did not reopen terminal (LIFO top)")
+	}
+	if m.selected != "tmux" {
+		t.Fatalf("LIFO reopen selected %q, want tmux", m.selected)
+	}
+	if !m.collapsed["harnesses"] {
+		t.Fatal("harnesses should still be collapsed under terminal in the stack")
+	}
 }
 
 func TestAcceptanceNavigationAndPlanMutations(t *testing.T) {
