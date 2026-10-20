@@ -460,7 +460,7 @@ func (m *Model) helpBox(width, height int) []string {
 		{"x", "Reset/clear all pending actions in the current plan"},
 		{"f", "Cycle filter: All → Outdated → Pending → Installed → Not Installed"},
 		{"/", "Incremental search by tool name, binary, backend, package, or description"},
-		{"b", "Simulate missing/installed mise bootstrap state"},
+		{"b / B", "Bootstrap state demo / fix mise shell integration"},
 		{"r", "Refresh installed binary checks and upstream version readings"},
 		{"Esc / q", "Close active overlay or return to the catalog desk"},
 	}

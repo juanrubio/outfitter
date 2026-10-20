@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -50,8 +51,9 @@ func testDeps(t *testing.T) (Deps, *catalog.Catalog) {
 		CheckStatus:   domain.StatusReady,
 	}
 
+	home := t.TempDir()
 	deps := Deps{
-		HomeDir: t.TempDir(),
+		HomeDir: home,
 		IsTTY:   func(_ io.Reader, _ io.Writer) bool { return false },
 		InspectLocal: func(_ context.Context, _ *catalog.Catalog) map[string]domain.ToolState {
 			return cloneStateMap(states)
@@ -72,6 +74,21 @@ func testDeps(t *testing.T) (Deps, *catalog.Catalog) {
 		},
 		MiseInstalled: func() (string, bool) {
 			return "/home/test/.local/bin/mise", true
+		},
+		ShellSetup: func() *engine.ShellSetup {
+			return &engine.ShellSetup{
+				HomeDir: home,
+				Getenv: func(key string) string {
+					switch key {
+					case "SHELL":
+						return "/bin/bash"
+					case "MISE_SHELL":
+						return "bash"
+					default:
+						return ""
+					}
+				},
+			}
 		},
 	}
 	return deps, cat
@@ -515,6 +532,137 @@ func TestUpdateWarnsAboutStrayBinaries(t *testing.T) {
 	}
 	if !strings.Contains(out, "sudo rm /usr/bin/dust") {
 		t.Errorf("post-run summary missing stray removal command:\n%s", out)
+	}
+}
+
+// unintegratedShellDeps returns deps whose shell (zsh) has no mise
+// integration, with rc files under the test home directory.
+func unintegratedShellDeps(t *testing.T) Deps {
+	t.Helper()
+	deps, _ := testDeps(t)
+	home := deps.HomeDir
+	deps.ShellSetup = func() *engine.ShellSetup {
+		return &engine.ShellSetup{
+			HomeDir: home,
+			Getenv: func(key string) string {
+				switch key {
+				case "SHELL":
+					return "/usr/bin/zsh"
+				case "PATH":
+					return "/usr/local/bin:/usr/bin:/bin"
+				default:
+					return ""
+				}
+			},
+		}
+	}
+	return deps
+}
+
+func TestDoctorDiagnoseDryRunAndFix(t *testing.T) {
+	deps := unintegratedShellDeps(t)
+	rc := filepath.Join(deps.HomeDir, ".zshrc")
+
+	out, err := runCLI(t, deps, "doctor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Shell: zsh", "Integration: missing", "outfitter doctor --fix", "mise activate zsh"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor output missing %q:\n%s", want, out)
+		}
+	}
+
+	out, err = runCLI(t, deps, "doctor", "--dry-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Would append to") || !strings.Contains(out, "# >>> outfitter mise >>>") {
+		t.Errorf("dry-run output missing block preview:\n%s", out)
+	}
+	if _, err := os.Stat(rc); !os.IsNotExist(err) {
+		t.Fatalf("dry-run must not create the rc file (stat err = %v)", err)
+	}
+
+	// Non-TTY without --yes refuses to write.
+	_, err = runCLI(t, deps, "doctor", "--fix")
+	requireExit(t, err, 2)
+	if _, err := os.Stat(rc); !os.IsNotExist(err) {
+		t.Fatalf("refused fix must not create the rc file (stat err = %v)", err)
+	}
+
+	out, err = runCLI(t, deps, "doctor", "--fix", "--yes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Added mise integration to") {
+		t.Errorf("fix output missing confirmation:\n%s", out)
+	}
+	data, err := os.ReadFile(rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `eval "$(/home/test/.local/bin/mise activate zsh)"`) {
+		t.Errorf("rc missing activate line:\n%s", data)
+	}
+
+	out, err = runCLI(t, deps, "doctor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Shell integration OK") {
+		t.Errorf("post-fix doctor should report OK:\n%s", out)
+	}
+}
+
+func TestDoctorShimsVariantAndJSON(t *testing.T) {
+	deps := unintegratedShellDeps(t)
+	out, err := runCLI(t, deps, "doctor", "--fix", "--shims", "--yes", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		MiseInstalled bool `json:"mise_installed"`
+		Changed       bool `json:"changed"`
+		Integration   struct {
+			Shell      string `json:"shell"`
+			Integrated bool   `json:"integrated"`
+		} `json:"integration"`
+	}
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("doctor JSON invalid: %v\n%s", err, out)
+	}
+	if !report.MiseInstalled || !report.Changed || !report.Integration.Integrated || report.Integration.Shell != "zsh" {
+		t.Fatalf("unexpected doctor report: %+v", report)
+	}
+	data, err := os.ReadFile(filepath.Join(deps.HomeDir, ".zshrc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `export PATH="$HOME/.local/share/mise/shims:$PATH"`) {
+		t.Errorf("rc missing shims line:\n%s", data)
+	}
+}
+
+func TestStatusWarnsAboutShellIntegration(t *testing.T) {
+	deps := unintegratedShellDeps(t)
+	out, err := runCLI(t, deps, "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Shell integration:", "outfitter doctor --fix", "mise activate zsh"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("status output missing %q:\n%s", want, out)
+		}
+	}
+
+	integrated, _ := testDeps(t)
+	out, err = runCLI(t, integrated, "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "Shell integration:") {
+		t.Errorf("integrated shell must not warn:\n%s", out)
 	}
 }
 

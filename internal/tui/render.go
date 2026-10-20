@@ -198,7 +198,7 @@ func (m *Model) headerLines(barTitle string) []string {
 		summaryToken = "accent"
 	}
 	lines := []string{
-		m.composeLine(headerLeft, []span{{text: summary, token: summaryToken, bold: pending > 0}}, m.width, ""),
+		m.composeLine(headerLeft, []span{{text: summary, token: summaryToken, bold: pending > 0}}, m.width),
 	}
 
 	var barLeft []span
@@ -221,7 +221,12 @@ func (m *Model) headerLines(barTitle string) []string {
 	if barTitle != "" || m.width < 110 {
 		barRight = nil
 	}
-	lines = append(lines, m.composeLine(barLeft, barRight, m.width, ""))
+	lines = append(lines, m.composeLine(barLeft, barRight, m.width))
+	if m.shellWarning != "" {
+		lines = append(lines, m.composeLine(
+			[]span{{text: truncateDisplay(m.shellWarning, m.width), token: "low", bold: true}},
+			nil, m.width))
+	}
 	if m.refreshing {
 		lines = append(lines, m.refreshLine())
 	}
@@ -294,7 +299,7 @@ func (m *Model) footerLines(hint, position string) []string {
 	if position != "" {
 		right = []span{{text: position, token: "accent", bold: true}}
 	}
-	lines = append(lines, m.composeLine(left, right, m.width, ""))
+	lines = append(lines, m.composeLine(left, right, m.width))
 	return lines
 }
 
@@ -729,13 +734,13 @@ func (m *Model) boxContentLine(content []span, width int) string {
 		borderStyle.Render("│")
 }
 
-func (m *Model) composeLine(left, right []span, width int, background string) string {
+func (m *Model) composeLine(left, right []span, width int) string {
 	if width <= 0 {
 		return ""
 	}
 	rightWidth := spansWidth(right)
 	if rightWidth >= width {
-		return m.renderSpans(right, width, background)
+		return m.renderSpans(right, width, "")
 	}
 	leftMax := width - rightWidth - 1
 	left = fitSpans(left, leftMax)
@@ -746,7 +751,7 @@ func (m *Model) composeLine(left, right []span, width int, background string) st
 		combined = append(combined, span{text: strings.Repeat(" ", gap), token: "text"})
 	}
 	combined = append(combined, right...)
-	return m.renderSpans(combined, width, background)
+	return m.renderSpans(combined, width, "")
 }
 
 func (m *Model) renderSpans(spans []span, width int, background string) string {

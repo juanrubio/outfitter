@@ -94,6 +94,7 @@ func NewRootCmdWithDeps(deps Deps) *cobra.Command {
 	cmd.AddCommand(
 		newStatusCmd(opts),
 		newCheckCmd(opts),
+		newDoctorCmd(opts),
 		newProfileCmd(opts),
 		newInstallCmd(opts),
 		newUpdateCmd(opts),

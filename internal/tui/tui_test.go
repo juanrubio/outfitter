@@ -547,6 +547,56 @@ func TestPlanReviewWarnsAboutStrayBinaries(t *testing.T) {
 	}
 }
 
+// TestShellWarningHeaderAndFix verifies the persistent shell-integration
+// warning line and the confirmed [B] fix action.
+func TestShellWarningHeaderAndFix(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	fixed := false
+	m, err := NewModel(Options{
+		Demo: true, Width: 120, Height: 40,
+		ShellWarning: "⚠ mise is not active in your zsh shell — mise-managed tools won't resolve in your terminal · [B] fix shell integration",
+		OnFixShell: func() (string, error) {
+			fixed = true
+			return "Added mise activation to ~/.zshrc — open a new terminal to use it", nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(m.View().Content, "mise is not active in your zsh shell") {
+		t.Fatalf("header missing shell warning:\n%s", m.View().Content)
+	}
+
+	// Cancelling the confirmation leaves everything untouched.
+	pressKey(m, 'B', "B")
+	if !m.confirmShellFix {
+		t.Fatal("B should ask for confirmation")
+	}
+	pressKey(m, 'n', "n")
+	if fixed {
+		t.Fatal("cancelled fix must not run")
+	}
+	if m.shellWarning == "" {
+		t.Fatal("cancelled fix must keep the warning")
+	}
+
+	// Confirming runs the fix and clears the warning.
+	pressKey(m, 'B', "B")
+	pressKey(m, 'y', "y")
+	if !fixed {
+		t.Fatal("confirmed fix did not run")
+	}
+	if m.shellWarning != "" {
+		t.Fatalf("shellWarning = %q, want cleared after fix", m.shellWarning)
+	}
+	if !strings.Contains(m.notice, "Added mise activation") {
+		t.Fatalf("notice = %q, want fix confirmation", m.notice)
+	}
+	if strings.Contains(m.View().Content, "mise is not active") {
+		t.Fatal("warning still rendered after fix")
+	}
+}
+
 func TestPlanEmptyStateAndHelp(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	m, err := NewModel(Options{Demo: true, Width: 80, Height: 24})

@@ -26,7 +26,10 @@ func newStatusCmd(opts *options) *cobra.Command {
 			if jsonOut {
 				return writeJSON(cmd.OutOrStdout(), entries)
 			}
-			return writeStatusTable(cmd.OutOrStdout(), cat.Tools, states)
+			if err := writeStatusTable(cmd.OutOrStdout(), cat.Tools, states); err != nil {
+				return err
+			}
+			return opts.writeShellWarning(cmd.OutOrStdout(), states)
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit machine-readable JSON")

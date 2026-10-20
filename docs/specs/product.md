@@ -201,6 +201,7 @@ While `outfitter` with no arguments opens the interactive TUI, the CLI provides 
 outfitter                                  # Open the interactive TUI
 outfitter status [--json]                  # List all catalog tools, installed versions, and available updates
 outfitter check [--json]                   # Check upstream registries for available updates
+outfitter doctor [--fix] [--shims] [--dry-run] [--yes] [--json]  # Diagnose/fix mise shell integration (bash/zsh)
 outfitter profile list                     # List built-in and custom profiles
 outfitter profile apply <name> [--dry-run] [--yes]  # Install all tools in a profile (e.g., server, desktop)
 outfitter install <tool-id>... [--dry-run] [--yes]  # Install specific tools

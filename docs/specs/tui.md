@@ -150,7 +150,8 @@ While applying the plan:
 
 When launched on a fresh Debian/Ubuntu machine where `~/.local/bin/mise` is not yet installed:
 - The top status bar shows `mise: not installed (will auto-bootstrap)` in amber.
-- Pressing `b` (or applying any plan that uses `mise`) shows the verified bootstrap step (`https://mise.jdx.dev` release tarball + SHA-256 check → `~/.local/bin/mise`) and offers to add `eval "$(~/.local/bin/mise activate bash)"` (or `~/.local/share/mise/shims` to `PATH`) if not already present.
+- Pressing `b` (or applying any plan that uses `mise`) shows the verified bootstrap step (`https://mise.jdx.dev` release tarball + SHA-256 check → `~/.local/bin/mise`).
+- When `mise` is installed but not active in the user's shell (no `mise activate` hook and no `~/.local/share/mise/shims` on `PATH`), a persistent amber header line warns that mise-managed tools will not resolve in the terminal. Pressing `B` offers (after `y` confirmation) to append a marked `eval "$(mise activate bash|zsh)"` block to the shell rc file; `outfitter doctor --fix [--shims]` does the same from the CLI. Fish and other shells get the manual line only.
 
 ---
 

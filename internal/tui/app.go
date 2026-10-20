@@ -113,6 +113,13 @@ type Options struct {
 	PlatformNotice string
 	OnRefresh      func(context.Context) (map[string]domain.ToolState, error)
 	OnExecute      func(context.Context, domain.ActionPlan, func(engine.StepEvent)) engine.PlanResult
+	// ShellWarning, when non-empty, is shown as a persistent header line
+	// until the shell fix succeeds. Live launches compute it from the
+	// host shell when unset.
+	ShellWarning string
+	// OnFixShell applies the mise shell-integration fix and returns a
+	// human-readable result line. Live launches install a default.
+	OnFixShell func() (string, error)
 }
 
 // Model is the Bubble Tea model for the catalog and inspector layouts.
@@ -140,6 +147,9 @@ type Model struct {
 	query           string
 	editing         bool
 	confirmQuit     bool
+	confirmShellFix bool
+	shellWarning    string
+	onFixShell      func() (string, error)
 	activeProfileID string
 	profileCursor   int
 	execSteps       []executionStep
@@ -191,6 +201,8 @@ func NewModel(opts Options) (*Model, error) {
 		autoRefresh:     !opts.Demo && opts.States == nil,
 		onRefresh:       opts.OnRefresh,
 		onExecute:       opts.OnExecute,
+		shellWarning:    opts.ShellWarning,
+		onFixShell:      opts.OnFixShell,
 	}
 
 	if opts.Demo {
@@ -245,6 +257,25 @@ func NewModel(opts Options) (*Model, error) {
 	}
 	if m.actions == nil {
 		m.actions = make(map[string]domain.DesiredAction)
+	}
+	if !opts.Demo && m.autoRefresh && m.onRefresh == nil && m.miseInstalled && m.shellWarning == "" {
+		setup := &engine.ShellSetup{}
+		if integration := setup.Detect(""); !integration.Integrated {
+			m.shellWarning = fmt.Sprintf("⚠ mise is not active in your %s shell — mise-managed tools won't resolve in your terminal · [B] fix shell integration", integration.Shell)
+			if m.onFixShell == nil {
+				m.onFixShell = func() (string, error) {
+					misePath, _ := engine.FindMise(nil, "")
+					changed, err := setup.Apply("", misePath, false)
+					if err != nil {
+						return "", err
+					}
+					if !changed {
+						return "Shell already integrated; nothing changed", nil
+					}
+					return "Added mise activation to " + integration.RCFile + " — open a new terminal to use it", nil
+				}
+			}
+		}
 	}
 	if m.miseVersion == "" {
 		m.miseVersion = "2026.10.1"
@@ -409,6 +440,15 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if m.confirmShellFix {
+		m.confirmShellFix = false
+		if keystroke == "y" {
+			m.applyShellFix()
+		} else {
+			m.notice = "Shell fix cancelled"
+		}
+		return m, nil
+	}
 
 	switch m.view {
 	case "profiles":
@@ -489,6 +529,13 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case "b":
 		m.toggleBootstrap()
+	case "B":
+		if m.shellWarning == "" {
+			m.notice = "Shell integration OK (mise active)"
+		} else {
+			m.confirmShellFix = true
+			m.notice = "Add mise activation to your shell rc file? Press y to confirm, any other key to cancel."
+		}
 	case "t":
 		m.cycleTheme()
 	case "r", "R":
@@ -833,6 +880,22 @@ func (m *Model) cycleFilter() {
 	m.filter = order[(index+1)%len(order)]
 	m.scrollOffset = 0
 	m.ensureSelection()
+}
+
+// applyShellFix runs the confirmed shell-integration fix and clears the
+// persistent warning on success.
+func (m *Model) applyShellFix() {
+	if m.onFixShell == nil {
+		m.notice = "Run: outfitter doctor --fix"
+		return
+	}
+	msg, err := m.onFixShell()
+	if err != nil {
+		m.notice = "Shell fix failed: " + err.Error()
+		return
+	}
+	m.shellWarning = ""
+	m.notice = msg
 }
 
 func (m *Model) toggleBootstrap() {

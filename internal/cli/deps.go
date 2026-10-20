@@ -33,6 +33,7 @@ type Deps struct {
 	) engine.PlanResult
 	RunTUI        func(ctx context.Context, opts tui.Options) error
 	MiseInstalled func() (string, bool)
+	ShellSetup    func() *engine.ShellSetup
 }
 
 // DefaultDeps returns production implementations for every CLI dependency.
@@ -62,6 +63,9 @@ func DefaultDeps() Deps {
 	deps.MiseInstalled = func() (string, bool) {
 		return engine.FindMise(nil, deps.HomeDir)
 	}
+	deps.ShellSetup = func() *engine.ShellSetup {
+		return &engine.ShellSetup{HomeDir: deps.HomeDir}
+	}
 	return deps
 }
 
@@ -87,6 +91,9 @@ func (d Deps) withDefaults() Deps {
 	}
 	if d.MiseInstalled == nil {
 		d.MiseInstalled = defaults.MiseInstalled
+	}
+	if d.ShellSetup == nil {
+		d.ShellSetup = defaults.ShellSetup
 	}
 	return d
 }
