@@ -19,7 +19,14 @@ func (a *Adapter) aptCommands(step domain.PlanStep) ([]CommandSpec, error) {
 	case domain.ActionInstall:
 		args = append(args, "install", "-y", pkg)
 	case domain.ActionUpdate:
-		args = append(args, "install", "--only-upgrade", "-y", pkg)
+		// A migrating update adopts a binary dpkg does not own yet;
+		// --only-upgrade would skip it as "not installed" and succeed
+		// without changing anything.
+		if step.Migrate {
+			args = append(args, "install", "-y", pkg)
+		} else {
+			args = append(args, "install", "--only-upgrade", "-y", pkg)
+		}
 	case domain.ActionRemove:
 		args = append(args, "remove", "-y", pkg)
 	default:

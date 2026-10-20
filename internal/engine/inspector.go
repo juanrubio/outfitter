@@ -210,9 +210,19 @@ func (i *Inspector) inspectTool(
 	state.Provenance = provenance
 	state.ProvenanceDetail = detail
 
-	if provenance == domain.ProvenanceAPT && installedVersion == "" {
+	if provenance == domain.ProvenanceAPT {
+		// classify only infers APT from the catalog backend or a system
+		// binary path. Require dpkg to actually own the package: a stray
+		// or self-built binary in /usr/bin or /usr/local/bin is an
+		// unmanaged external install that apt cannot update in place.
 		if version, err := i.dpkgVersion(ctx, tool.Package); err == nil {
-			installedVersion = version
+			if installedVersion == "" {
+				installedVersion = version
+			}
+		} else {
+			state.Provenance = domain.ProvenanceExternal
+			state.ProvenanceDetail = fmt.Sprintf(
+				"External installation (%s)", displayPath(i.HomeDir, state.BinaryPath))
 		}
 	}
 	if installedVersion == "" {

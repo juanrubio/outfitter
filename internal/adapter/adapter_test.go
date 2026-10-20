@@ -305,6 +305,78 @@ func TestAPTCommands(t *testing.T) {
 	}
 }
 
+// TestMigrateUpdateCommandsUseInstallSemantics verifies that an update
+// step flagged Migrate (the backend does not own the discovered install)
+// runs the backend's install command instead of its upgrade-only command,
+// which would silently do nothing.
+func TestMigrateUpdateCommandsUseInstallSemantics(t *testing.T) {
+	cases := []struct {
+		name     string
+		tool     domain.Tool
+		commands []string
+	}{
+		{
+			name: "mise aqua migrate uses use --global @latest",
+			tool: domain.Tool{
+				ID: "dust", Binary: "dust", Backend: domain.BackendMiseAqua,
+				Package: "bootandy/dust",
+			},
+			commands: []string{"mise use --global aqua:bootandy/dust@latest"},
+		},
+		{
+			name: "mise ubi migrate uses use --global @latest",
+			tool: domain.Tool{
+				ID: "broot", Binary: "broot", Backend: domain.BackendMiseUbi,
+				Package: "Canop/broot",
+			},
+			commands: []string{"mise use --global ubi:Canop/broot@latest"},
+		},
+		{
+			name: "mise npm migrate keeps node prerequisite",
+			tool: domain.Tool{
+				ID: "codex", Binary: "codex", Backend: domain.BackendMiseNPM,
+				Package: "@openai/codex",
+			},
+			commands: []string{
+				"mise use --global node@lts",
+				"mise use --global npm:@openai/codex@latest",
+			},
+		},
+		{
+			name: "uv migrate uses tool install",
+			tool: domain.Tool{
+				ID: "browser-use", Binary: "browser-use", Backend: domain.BackendUV,
+				Package: "browser-use",
+			},
+			commands: []string{
+				"mise use --global uv@latest",
+				"mise x uv -- uv tool install browser-use",
+			},
+		},
+		{
+			name: "apt migrate drops --only-upgrade",
+			tool: domain.Tool{
+				ID: "tig", Binary: "tig", Backend: domain.BackendAPT,
+				Package: "tig", Sudo: true,
+			},
+			commands: []string{"sudo apt-get install -y tig"},
+		},
+	}
+
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			a, _ := testAdapter(t)
+			step := planStep(test.tool, domain.ActionUpdate)
+			step.Migrate = true
+			specs, err := a.Commands(step)
+			if err != nil {
+				t.Fatalf("Commands: %v", err)
+			}
+			assertDisplays(t, specs, test.commands...)
+		})
+	}
+}
+
 func TestVendorCommandsUseConfiguredShell(t *testing.T) {
 	a, _ := testAdapter(t)
 	tool := domain.Tool{

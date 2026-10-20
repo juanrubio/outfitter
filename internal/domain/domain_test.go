@@ -348,6 +348,66 @@ func TestBuildActionPlan(t *testing.T) {
 	}
 }
 
+// TestBuildActionPlanMigratesUnmanagedUpdates verifies that an update
+// queued against an installation the catalog backend does not own (an
+// external PATH binary) becomes a migration: the step keeps the update
+// action and version range but carries the install command, because
+// upgrade-only commands (mise upgrade, apt --only-upgrade) are no-ops for
+// tools their backend never installed.
+func TestBuildActionPlanMigratesUnmanagedUpdates(t *testing.T) {
+	tools := []domain.Tool{
+		{ID: "dust", Name: "dust", Binary: "dust", Backend: domain.BackendMiseAqua, Package: "bootandy/dust"},
+		{ID: "tig", Name: "tig", Binary: "tig", Backend: domain.BackendAPT, Package: "tig", Sudo: true},
+		{ID: "codex", Name: "Codex", Binary: "codex", Backend: domain.BackendMiseNPM, Package: "@openai/codex"},
+	}
+	states := map[string]domain.ToolState{
+		"dust":  {InstalledVersion: "1.2.4", LatestVersion: "1.2.6", Provenance: domain.ProvenanceExternal},
+		"tig":   {InstalledVersion: "2.5.2", LatestVersion: "2.6.0", Provenance: domain.ProvenanceExternal},
+		"codex": {InstalledVersion: "0.163.0", LatestVersion: "0.165.0", Provenance: domain.ProvenanceMise},
+	}
+	actions := map[string]domain.DesiredAction{
+		"dust":  domain.ActionUpdate,
+		"tig":   domain.ActionUpdate,
+		"codex": domain.ActionUpdate,
+	}
+
+	plan := domain.BuildActionPlan(tools, states, actions, true, "")
+
+	if len(plan.Updates) != 3 {
+		t.Fatalf("updates = %d, want 3", len(plan.Updates))
+	}
+	byID := make(map[string]domain.PlanStep, len(plan.Updates))
+	for _, step := range plan.Updates {
+		byID[step.Tool.ID] = step
+	}
+
+	dust := byID["dust"]
+	if !dust.Migrate {
+		t.Errorf("dust: Migrate = false, want true for external provenance")
+	}
+	if dust.Command != "mise use --global aqua:bootandy/dust@latest" {
+		t.Errorf("dust: command = %q, want install command", dust.Command)
+	}
+	if dust.FromVersion != "1.2.4" || dust.ToVersion != "1.2.6" {
+		t.Errorf("dust: versions = %q -> %q, want 1.2.4 -> 1.2.6", dust.FromVersion, dust.ToVersion)
+	}
+
+	tig := byID["tig"]
+	if !tig.Migrate {
+		t.Errorf("tig: Migrate = false, want true for external provenance")
+	}
+	if tig.Command != "sudo apt-get install -y tig" {
+		t.Errorf("tig: command = %q, want install command", tig.Command)
+	}
+
+	codex := byID["codex"]
+	if codex.Migrate {
+		t.Errorf("codex: Migrate = true, want false for mise provenance")
+	}
+	if codex.Command != "mise upgrade npm:@openai/codex" {
+		t.Errorf("codex: command = %q, want update command", codex.Command)
+	}
+}
 func TestBuildActionPlanBootstrapRules(t *testing.T) {
 	miseTool := domain.Tool{ID: "codex", Binary: "codex", Backend: domain.BackendMiseNPM, Package: "@openai/codex"}
 	uvTool := domain.Tool{ID: "browser-use", Binary: "browser-use", Backend: domain.BackendUV, Package: "browser-use"}

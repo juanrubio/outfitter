@@ -43,7 +43,13 @@ func (a *Adapter) miseCommands(step domain.PlanStep) ([]CommandSpec, error) {
 		case domain.ActionInstall:
 			verb = "install"
 		case domain.ActionUpdate:
-			verb = "upgrade"
+			// A migrating update adopts a binary uv does not own yet;
+			// "uv tool upgrade" only works on uv-installed tools.
+			if step.Migrate {
+				verb = "install"
+			} else {
+				verb = "upgrade"
+			}
 		case domain.ActionRemove:
 			verb = "uninstall"
 		default:
@@ -62,7 +68,14 @@ func (a *Adapter) miseCommands(step domain.PlanStep) ([]CommandSpec, error) {
 	case domain.ActionInstall:
 		specs = append(specs, miseSpecCommand(mise, "use", "--global", spec+"@latest"))
 	case domain.ActionUpdate:
-		specs = append(specs, miseSpecCommand(mise, "upgrade", spec))
+		// A migrating update adopts a binary mise does not own yet;
+		// "mise upgrade" on a tool absent from the mise config reports
+		// "All tools are up to date" and changes nothing.
+		if step.Migrate {
+			specs = append(specs, miseSpecCommand(mise, "use", "--global", spec+"@latest"))
+		} else {
+			specs = append(specs, miseSpecCommand(mise, "upgrade", spec))
+		}
 	case domain.ActionRemove:
 		specs = append(specs, miseSpecCommand(mise, "unuse", "--global", spec))
 	default:

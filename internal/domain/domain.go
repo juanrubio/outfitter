@@ -142,6 +142,32 @@ func (s ToolState) IsInstalled() bool {
 	return s.InstalledVersion != ""
 }
 
+// ManagedByBackend reports whether the discovered installation is owned by
+// the given catalog backend, so the backend's upgrade-only command can
+// update it in place. An unknown provenance (for example a state built
+// without discovery) is treated as managed to preserve the classic update
+// path; only a concretely different channel counts as unmanaged.
+func (s ToolState) ManagedByBackend(backend BackendType) bool {
+	switch s.Provenance {
+	case "", ProvenanceNone:
+		return true
+	}
+	switch backend {
+	case BackendMiseAqua, BackendMiseUbi, BackendMiseGitHub, BackendMiseNPM:
+		return s.Provenance == ProvenanceMise
+	case BackendUV:
+		return s.Provenance == ProvenanceUV
+	case BackendAPT:
+		return s.Provenance == ProvenanceAPT
+	case BackendVendor:
+		return s.Provenance == ProvenanceVendor
+	case BackendSource:
+		return s.Provenance == ProvenanceSource
+	default:
+		return false
+	}
+}
+
 // IsOutdated reports whether both versions are known and LatestVersion is
 // strictly newer than InstalledVersion.
 func (s ToolState) IsOutdated() bool {

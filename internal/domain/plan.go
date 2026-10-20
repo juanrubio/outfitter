@@ -18,6 +18,11 @@ type PlanStep struct {
 	ToVersion   string        `json:"to_version,omitempty"`
 	Command     string        `json:"command"`
 	Sudo        bool          `json:"sudo"`
+	// Migrate marks an update step whose discovered installation is not
+	// owned by the tool's catalog backend (for example an external PATH
+	// binary). Such a step executes the backend's install command instead
+	// of its upgrade-only command, which would silently change nothing.
+	Migrate bool `json:"migrate,omitempty"`
 }
 
 // ActionPlan is the ordered, dry-run representation of a pending plan.
@@ -274,6 +279,13 @@ func BuildActionPlan(
 			step.FromVersion = state.InstalledVersion
 			step.ToVersion = state.LatestVersion
 			step.Command = tool.UpdateCommand()
+			if !state.ManagedByBackend(tool.Backend) {
+				// The backend does not own the discovered binary, so its
+				// upgrade-only command would change nothing. Adopt the
+				// tool by running the install command instead.
+				step.Migrate = true
+				step.Command = tool.InstallCommand()
+			}
 			updates = append(updates, step)
 		case ActionRemove:
 			step.FromVersion = state.InstalledVersion

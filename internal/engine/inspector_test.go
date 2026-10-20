@@ -166,6 +166,67 @@ func TestInspectLocalAllBackends(t *testing.T) {
 	}
 }
 
+// TestInspectLocalUnmanagedSystemBinariesAreExternal covers binaries that
+// live in system paths (or whose catalog backend is apt) but are not owned
+// by dpkg: a stray /usr/bin copy of a mise tool, a manually installed
+// /usr/local/bin binary, and a self-built copy of an apt tool. None of
+// them may be reported as APT packages, because apt cannot update them.
+func TestInspectLocalUnmanagedSystemBinariesAreExternal(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+
+	runner := &fakeRunner{respond: func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if filepath.Base(name) == "mise" && len(args) == 3 && args[0] == "ls" {
+			return []byte(`{}`), nil
+		}
+		if name == "dpkg-query" {
+			return nil, errors.New("dpkg-query: package not installed")
+		}
+		switch filepath.Base(name) {
+		case "dust":
+			return []byte("Dust 1.2.4\n"), nil
+		case "broot":
+			return []byte("broot 1.2.4\n"), nil
+		case "tig":
+			return []byte("tig version 2.5.2\n"), nil
+		default:
+			return nil, fmt.Errorf("unexpected command %s %v", name, args)
+		}
+	}}
+
+	lookPath := lookPathFromMap(map[string]string{
+		"mise":  "/usr/local/bin/mise",
+		"dust":  "/usr/bin/dust",
+		"broot": "/usr/local/bin/broot",
+		"tig":   "/usr/local/bin/tig",
+	})
+
+	cat := testCatalog(
+		testTool("dust", "dust", domain.BackendMiseAqua, "bootandy/dust"),
+		testTool("broot", "broot", domain.BackendMiseUbi, "Canop/broot"),
+		testTool("tig", "tig", domain.BackendAPT, "tig"),
+	)
+
+	inspector := &Inspector{HomeDir: home, Runner: runner, LookPath: lookPath}
+	states := inspector.InspectLocal(context.Background(), cat)
+
+	wantVersions := map[string]string{"dust": "1.2.4", "broot": "1.2.4", "tig": "2.5.2"}
+	for id, version := range wantVersions {
+		state, ok := states[id]
+		if !ok {
+			t.Errorf("%s: missing state", id)
+			continue
+		}
+		if state.Provenance != domain.ProvenanceExternal {
+			t.Errorf("%s: provenance = %q (detail %q), want %q",
+				id, state.Provenance, state.ProvenanceDetail, domain.ProvenanceExternal)
+		}
+		if state.InstalledVersion != version {
+			t.Errorf("%s: installed version = %q, want %q", id, state.InstalledVersion, version)
+		}
+	}
+}
+
 func TestInspectLocalMiseSliceFormat(t *testing.T) {
 	t.Parallel()
 	runner := &fakeRunner{respond: func(_ context.Context, name string, args ...string) ([]byte, error) {
