@@ -1,3 +1,3 @@
-# CLAUDE.md
+@AGENTS.md
 
-See [AGENTS.md](AGENTS.md). It is the single contributor front door.
+All contributor and agent guidance for this repository lives in [AGENTS.md](AGENTS.md), so there is a single source of truth.
