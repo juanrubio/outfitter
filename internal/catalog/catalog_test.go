@@ -141,6 +141,8 @@ func TestLoadDefault(t *testing.T) {
 	}
 
 	assertTool(t, cat, "codex", "OpenAI Codex CLI", "codex", "harnesses", domain.BackendMiseNPM, "@openai/codex")
+	assertTool(t, cat, "boardwalk", "Boardwalk", "boardwalk", "ai-tuis", domain.BackendMiseUbi, "juanrubio/boardwalk")
+	assertTool(t, cat, "trailmark", "Trailmark", "trailmark", "ai-tuis", domain.BackendMiseUbi, "juanrubio/trailmark")
 	assertTool(t, cat, "quotary", "Quotary", "quotary", "ai-tuis", domain.BackendMiseUbi, "juanrubio/quotary")
 	assertTool(t, cat, "tmux", "tmux", "tmux", "terminal", domain.BackendAPT, "tmux")
 	assertTool(t, cat, "browser-use", "browser-use", "browser-use", "utilities", domain.BackendUV, "browser-use")
@@ -151,6 +153,16 @@ func TestLoadDefault(t *testing.T) {
 	}
 	if !contains(quotary.Profiles, "desktop") {
 		t.Fatalf("quotary profiles = %v", quotary.Profiles)
+	}
+
+	trailmark, _ := cat.ToolByID("trailmark")
+	if trailmark.InstallCmd != "mise use --global ubi:juanrubio/trailmark[exe=trailmark]@latest" {
+		t.Fatalf("trailmark install command = %q", trailmark.InstallCmd)
+	}
+	for _, profile := range []string{"desktop", "server", "minimal"} {
+		if !contains(trailmark.Profiles, profile) {
+			t.Fatalf("trailmark profiles = %v, want %q", trailmark.Profiles, profile)
+		}
 	}
 
 	tmux, _ := cat.ToolByID("tmux")
@@ -178,6 +190,37 @@ func TestLoadDefault(t *testing.T) {
 	for index := range cat.Tools {
 		if again.Tools[index].ID != cat.Tools[index].ID {
 			t.Fatalf("tool order changed at %d: %q != %q", index, again.Tools[index].ID, cat.Tools[index].ID)
+		}
+	}
+}
+
+// Recorded --version output of the personal ubi tools, so a catalog
+// version_regex drift against the real binaries fails here.
+func TestPersonalToolsVersionRegex(t *testing.T) {
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	samples := map[string]string{
+		"boardwalk": "boardwalk version v0.6.0",
+		"trailmark": "trailmark version 0.7.1",
+		"quotary":   "quotary version 0.5.0",
+	}
+	for id, output := range samples {
+		tool, ok := cat.ToolByID(id)
+		if !ok {
+			t.Fatalf("tool %q missing", id)
+		}
+		if len(tool.VersionArgs) != 1 || tool.VersionArgs[0] != "--version" {
+			t.Errorf("tool %q version args = %v", id, tool.VersionArgs)
+		}
+		re, err := regexp.Compile(tool.VersionRegex)
+		if err != nil {
+			t.Fatalf("tool %q version regex: %v", id, err)
+		}
+		match := re.FindStringSubmatch(output)
+		if len(match) != 2 || match[1] == "" {
+			t.Errorf("tool %q regex %q does not capture a version from %q", id, tool.VersionRegex, output)
 		}
 	}
 }

@@ -66,7 +66,7 @@ Every mutating command first builds the ordered execution plan. Preview safely w
 
 ## Customizing your catalog (`catalog.toml`)
 
-Outfitter ships with **39 curated tools** across 4 categories and 4 profiles (`desktop`, `server`, `harnesses`, `minimal`). You can override any built-in tool, add your own tools, or define custom machine profiles in `~/.config/outfitter/catalog.toml` (or pass `--catalog /path/to/catalog.toml` from your dotfiles repository):
+Outfitter ships with **48 curated tools** across 4 categories and 4 profiles (`desktop`, `server`, `harnesses`, `minimal`). You can override any built-in tool, add your own tools, or define custom machine profiles in `~/.config/outfitter/catalog.toml` (or pass `--catalog /path/to/catalog.toml` from your dotfiles repository):
 
 ```toml
 # Override a built-in tool to build from local source while developing
