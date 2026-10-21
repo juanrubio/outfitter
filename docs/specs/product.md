@@ -86,54 +86,71 @@ When Outfitter starts and detects that `mise` is not on `PATH` (and not at `~/.l
 
 ## 4. Built-In Opinionated Catalog
 
-Outfitter ships with 28 curated tools across 4 categories and 4 preset profiles:
+Outfitter ships with 48 curated tools across 4 categories and 4 preset profiles. The embedded source of truth is `internal/catalog/default_catalog.toml`; `outfitter catalog show` reports the effective counts and `outfitter catalog export` prints the same catalog.
 
 ### Category 1: Coding Harnesses (`harnesses`)
 | ID | Name | Binary | Backend | Default Profiles | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `claude-code` | Claude Code | `claude` | `vendor` (`claude update`) | `desktop`, `server`, `harnesses`, `minimal` | Anthropic's agentic coding CLI with MCP, hooks, and skills |
-| `codex` | OpenAI Codex CLI | `codex` | `mise:npm` (`@openai/codex`) | `desktop`, `server`, `harnesses`, `minimal` | OpenAI's local coding agent CLI |
-| `muse` | Muse Code | `muse` | `vendor` (`api.meta.ai/muse-launcher.sh`) | `desktop`, `server`, `harnesses` | Meta's agentic coding CLI for Wonder and Wonder Full |
-| `antigravity-cli` | Antigravity CLI | `agy` | `vendor` (`antigravity-cli`) | `desktop`, `server`, `harnesses` | Google DeepMind's agentic coding CLI (`agy`) |
-| `opencode` | OpenCode v2 | `opencode` | `vendor` (`opencode upgrade`) | `desktop`, `server`, `harnesses` | Terminal-native AI coding agent (`opencode v2`) |
-| `pi` | Pi Coding Agent | `pi` | `mise:npm` (`@earendil-works/pi-coding-agent`) | `desktop`, `harnesses` | Minimalist, extensible terminal coding harness |
-| `gemini-cli` | Gemini CLI | `gemini` | `mise:npm` (`@google/gemini-cli`) | `desktop`, `harnesses` | Google's open-source Gemini terminal agent |
-| `copilot-cli` | GitHub Copilot CLI | `copilot` | `mise:npm` (`@github/copilot`) | `desktop`, `harnesses` | GitHub's terminal coding assistant |
+| `claude-code` | Claude Code | `claude` | `vendor` (`anthropic/claude-code`) | `desktop`, `server`, `harnesses`, `minimal` | Anthropic agentic coding CLI with MCP servers, hooks, skills, and memory. |
+| `codex` | OpenAI Codex CLI | `codex` | `mise:npm` (`@openai/codex`) | `desktop`, `server`, `harnesses`, `minimal` | OpenAI local coding agent CLI with session logs and reasoning controls. |
+| `muse` | Muse Code | `muse` | `vendor` (`api.meta.ai/muse-code (muse-stable)`) | `desktop`, `server`, `harnesses` | Meta agentic coding CLI driving Wonder and Wonder Full models. |
+| `antigravity-cli` | Antigravity CLI | `agy` | `vendor` (`google-deepmind/antigravity-cli`) | `desktop`, `server`, `harnesses` | Google DeepMind agentic coding assistant CLI (agy) with subagents and skills. |
+| `opencode` | OpenCode v2 | `opencode` | `vendor` (`sst/opencode`) | `desktop`, `server`, `harnesses` | Terminal-native AI coding agent (v2) with multi-provider support. |
+| `pi` | Pi Coding Agent | `pi` | `mise:npm` (`@earendil-works/pi-coding-agent`) | `desktop`, `harnesses` | Minimalist, hackable terminal coding harness by Earendil Works. |
+| `gemini-cli` | Gemini CLI | `gemini` | `mise:npm` (`@google/gemini-cli`) | `desktop`, `harnesses` | Google open-source Gemini terminal coding agent. |
+| `copilot-cli` | GitHub Copilot CLI | `copilot` | `mise:npm` (`@github/copilot`) | `desktop`, `harnesses` | GitHub Copilot agentic command-line assistant. |
 
 ### Category 2: AI TUIs & Personal Tools (`ai-tuis`)
 | ID | Name | Binary | Backend | Default Profiles | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `boardwalk` | Boardwalk | `boardwalk` | `mise:ubi` (`juanrubio/boardwalk`) | `desktop`, `server`, `minimal` | GitHub Projects v2 boards in the terminal (`gh` auth) |
-| `trailmark` | Trailmark | `trailmark` | `mise:ubi` (`juanrubio/trailmark`) | `desktop`, `server`, `minimal` | Local TUI for browsing coding-agent sessions and memory |
-| `quotary` | Quotary | `quotary` | `mise:ubi` (`juanrubio/quotary` + `source` fallback) | `desktop` | Terminal dashboard for AI subscription allowances & history |
-| `codexbar` | CodexBar CLI | `codexbar` | `vendor` (`steipete/CodexBar` bundle) | `desktop` | Provider quota and usage reader backend for Quotary |
-| `openclaw` | OpenClaw | `openclaw` | `mise:npm` (`openclaw`) | `desktop`, `server` | Self-hosted personal AI assistant and worker coordinator |
-| `mercadona-cli` | mercadona-cli | `mercadona` | `mise:npm` (`github:juanrubio/mercadona-cli`) | `desktop`, `server` | Agent-friendly CLI (`--json`) for grocery carts and orders |
+| `boardwalk` | Boardwalk | `boardwalk` | `mise:ubi` (`juanrubio/boardwalk`) | `desktop`, `server`, `minimal` | Your GitHub Projects v2 boards in the terminal, powered by gh auth. |
+| `trailmark` | Trailmark | `trailmark` | `mise:ubi` (`juanrubio/trailmark`) | `desktop`, `server`, `minimal` | Local keyboard-first TUI for browsing coding-agent sessions and saved memories. |
+| `quotary` | Quotary | `quotary` | `mise:ubi` (`juanrubio/quotary`) | `desktop` | Go terminal dashboard for AI subscription capacity, reset times, and token history. |
+| `codexbar` | CodexBar CLI | `codexbar` | `vendor` (`steipete/CodexBar`) | `desktop` | Provider allowance and usage reader CLI used as the backend for Quotary. |
+| `mercadona-cli` | mercadona-cli | `mercadona` | `mise:npm` (`juanrubio/mercadona-cli`) | `desktop`, `server` | Agent-friendly CLI (--json) for Mercadona carts, orders, and checkout flows. |
 
 ### Category 3: Terminal & Session Management (`terminal`)
 | ID | Name | Binary | Backend | Default Profiles | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `tmux` | tmux | `tmux` | `apt` (`tmux`) | `desktop`, `server`, `minimal` | Terminal multiplexer for persistent local and agent sessions |
-| `hive` | Hive | `hive` | `mise:ubi` (`mdipanjan/hive`) | `desktop`, `server` | Lightweight TUI for managing tmux sessions |
-| `gh` | GitHub CLI | `gh` | `apt` (`gh` official repo) / `mise:aqua` | `desktop`, `server`, `minimal` | GitHub command-line tool and token provider for Boardwalk |
-| `lazygit` | Lazygit | `lazygit` | `mise:aqua` (`jesseduffield/lazygit`) | `desktop`, `server` | Terminal UI for git repositories, worktrees, and staging |
-| `fzf` | fzf | `fzf` | `mise:aqua` (`junegunn/fzf`) | `desktop`, `server`, `minimal` | Command-line fuzzy finder used by shell and tmux switchers |
-| `delta` | git-delta | `delta` | `mise:aqua` (`dandavison/delta`) | `desktop`, `server` | Syntax-highlighting pager for git and diff output |
-| `glow` | Glow | `glow` | `mise:aqua` (`charmbracelet/glow`) | `desktop` | Render Markdown specs and agent notes on the CLI |
-| `ripgrep` | ripgrep | `rg` | `mise:aqua` (`BurntSushi/ripgrep`) | `desktop`, `server`, `minimal` | Fast line-oriented regex search tool |
-| `fd` | fd | `fd` | `mise:aqua` (`sharkdp/fd`) | `desktop`, `server` | Fast and user-friendly alternative to `find` |
-| `jq` | jq | `jq` | `mise:aqua` (`jqlang/jq`) | `desktop`, `server`, `minimal` | Command-line JSON processor for scripts and agent hooks |
-| `btop` | btop | `btop` | `apt` (`btop`) | `desktop`, `server` | Resource monitor for CPU, memory, and agent processes |
+| `tmux` | tmux | `tmux` | `apt` (`tmux`) | `desktop`, `server`, `minimal` | Terminal multiplexer for persistent local and remote coding-agent sessions. |
+| `byobu` | Byobu | `byobu` | `apt` (`byobu`) | `desktop`, `server` | Text-based window manager and terminal multiplexer wrapper for tmux. |
+| `hive` | Hive | `hive` | `mise:ubi` (`mdipanjan/hive`) | `desktop`, `server` | Lightweight Bubble Tea TUI for managing and switching tmux sessions. |
+| `herdr` | Herdr | `herdr` | `mise:aqua` (`herdrdev/herdr`) | `desktop`, `server` | Detachable terminal session runtime where coding agents live: split panes, walk away, reattach. |
+| `gh` | GitHub CLI | `gh` | `apt` (`gh`) | `desktop`, `server`, `minimal` | GitHub official CLI; provides zero-storage OAuth tokens for Boardwalk and Outfitter. |
+| `gh-dash` | gh-dash | `gh-dash` | `mise:aqua` (`dlvhdr/gh-dash`) | `desktop`, `server` | GitHub dashboard TUI for pull requests and issues, built as a GitHub CLI companion. |
+| `lazygit` | Lazygit | `lazygit` | `mise:aqua` (`jesseduffield/lazygit`) | `desktop`, `server` | Simple terminal UI for git commands, interactive staging, and worktree inspection. |
+| `fzf` | fzf | `fzf` | `mise:aqua` (`junegunn/fzf`) | `desktop`, `server`, `minimal` | Command-line fuzzy finder powering shell history and tmax session popups. |
+| `delta` | git-delta | `delta` | `mise:aqua` (`dandavison/delta`) | `desktop`, `server` | Syntax-highlighting pager for git, diff, and grep output. |
+| `glow` | Glow | `glow` | `mise:aqua` (`charmbracelet/glow`) | `desktop` | Render Markdown specs, PRDs, and agent memory files on the CLI. |
+| `ripgrep` | ripgrep | `rg` | `mise:aqua` (`BurntSushi/ripgrep`) | `desktop`, `server`, `minimal` | Recursively searches directories for a regex pattern at high speed. |
+| `fd` | fd | `fd` | `mise:aqua` (`sharkdp/fd`) | `desktop`, `server` | Fast, user-friendly alternative to find used by coding harnesses. |
+| `jq` | jq | `jq` | `mise:aqua` (`jqlang/jq`) | `desktop`, `server`, `minimal` | Lightweight and flexible command-line JSON processor. |
+| `btop` | btop | `btop` | `apt` (`btop`) | `desktop`, `server` | Resource monitor showing usage and stats for processor, memory, disks, and processes. |
+| `zoxide` | zoxide | `zoxide` | `mise:aqua` (`ajeetdsouza/zoxide`) | `desktop`, `server`, `minimal` | Smarter cd command inspired by z and autojump that learns your most used directories. |
+| `eza` | eza | `eza` | `mise:aqua` (`eza-community/eza`) | `desktop`, `server` | Modern, maintained replacement for ls and exa with Git status and tree views. |
+| `bat` | bat | `bat` | `mise:aqua` (`sharkdp/bat`) | `desktop`, `server` | Cat clone with syntax highlighting, Git integration, and fzf preview support. |
+| `dust` | dust | `dust` | `mise:aqua` (`bootandy/dust`) | `desktop`, `server` | Intuitive disk usage analyzer in Rust; visual replacement for du. |
+| `broot` | broot | `broot` | `mise:github` (`broot`) | `desktop`, `server` | Interactive directory tree navigator and fuzzy file manager. |
+| `tig` | tig | `tig` | `apt` (`tig`) | `desktop`, `server` | Ncurses text-mode interface for Git repositories and commit history. |
+| `htop` | htop | `htop` | `apt` (`htop`) | `desktop`, `server` | Interactive process viewer and system monitor. |
+| `porthole` | Porthole | `porthole` | `mise:github` (`subh05sus/porthole`) | `desktop`, `server` | Port kill switch and service viewer for the terminal: see what is listening and stop it, project-aware. |
 
 ### Category 4: Agent & CLI Utilities (`utilities`)
 | ID | Name | Binary | Backend | Default Profiles | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `browser-use` | browser-use | `browser-use` | `uv` (`browser-use`) | `desktop` | AI browser automation CLI and TUI (`browser-use-tui`, `bu`) |
-| `mcporter` | MCPorter | `mcporter` | `mise:npm` (`mcporter`) | `desktop` | Inspector and manager for Model Context Protocol servers |
-| `oracle` | Oracle | `oracle` | `mise:npm` (`@steipete/oracle`) | `desktop` | Second-opinion query CLI for coding agents |
-| `summarize` | Summarize | `summarize` | `mise:npm` (`@steipete/summarize`) | `desktop` | Fast URL, video, and document summarizer CLI for agents |
-| `wacli` | wacli | `wacli` | `mise:ubi` (`steipete/wacli`) | `desktop`, `server` | WhatsApp CLI bridge for personal agents |
-| `hcloud` | Hetzner Cloud CLI | `hcloud` | `mise:aqua` (`hetznercloud/cli`) | `desktop`, `server` | Manage Hetzner VPS instances (e.g., remote agent hosts) |
+| `browser-use` | browser-use | `browser-use` | `uv` (`browser-use`) | `desktop` | AI browser automation CLI and TUI (provides browser-use, browser-use-tui, bu). |
+| `openclaw` | OpenClaw | `openclaw` | `mise:npm` (`openclaw`) | `desktop`, `server` | Open-source personal AI assistant and tmux worker coordinator (Galactus & Sam). |
+| `mcporter` | MCPorter | `mcporter` | `mise:npm` (`mcporter`) | `desktop` | CLI utility for inspecting, testing, and managing MCP server configurations. |
+| `oracle` | Oracle | `oracle` | `mise:npm` (`@steipete/oracle`) | `desktop` | Second-opinion architectural review CLI for coding agents. |
+| `summarize` | Summarize | `summarize` | `mise:npm` (`@steipete/summarize`) | `desktop` | Fast URL, article, and transcript summarizer CLI for agent pipelines. |
+| `wacli` | wacli | `wacli` | `mise:ubi` (`steipete/wacli`) | `desktop`, `server` | WhatsApp CLI bridge used by OpenClaw personal agents. |
+| `twitter-cli` | Twitter CLI | `twitter` | `uv` (`twitter-cli`) | `desktop`, `server` | Twitter/X CLI for feed, bookmarks, and user timelines in the terminal. |
+| `hcloud` | Hetzner Cloud CLI | `hcloud` | `mise:aqua` (`hetznercloud/cli`) | `desktop`, `server` | Official Hetzner Cloud CLI for managing remote VPS agent instances. |
+| `aws-cli` | AWS CLI | `aws` | `mise:aqua` (`aws/aws-cli`) | `desktop`, `server` | Official Amazon Web Services CLI v2 for managing AWS accounts and resources. |
+| `cloudflare-cf` | Cloudflare CLI | `cf` | `mise:npm` (`cf`) | `desktop`, `server` | Cloudflare's unified CLI (cf) for DNS, Workers, and account resources. |
+| `wrangler` | Wrangler | `wrangler` | `mise:npm` (`wrangler`) | `desktop`, `server` | Cloudflare Workers CLI to build, preview, and deploy Workers and Pages. |
+| `tailscale` | Tailscale | `tailscale` | `apt` (`tailscale`) | `desktop`, `server` | WireGuard-based mesh VPN CLI; requires the Tailscale APT repo and a one-time tailscale up login. |
+| `visidata` | VisiData | `vd` | `uv` (`visidata`) | `desktop`, `server` | Interactive terminal spreadsheet and tabular data explorer for CSV, JSONL, and SQLite. |
 
 ---
 

@@ -120,10 +120,10 @@ Every tool has an **Installed State** on disk and a **Desired State** in the TUI
 
 Pressing `p` opens the **Profile Selector** overlay, allowing you to outfit a machine in seconds:
 
-1. **Full Desktop (`desktop`) — 28 tools:** All Coding Harnesses, AI TUIs (`boardwalk`, `trailmark`, `quotary`, `codexbar`, `openclaw`, `mercadona-cli`), Terminal tools (`tmux`, `hive`, `lazygit`, `gh`, `fzf`, `delta`, `glow`, `ripgrep`, `fd`, `jq`, `btop`), and Agent Utilities (`browser-use`, `mcporter`, `oracle`, `summarize`, `wacli`, `hcloud`).
-2. **Headless Server / VPS (`server`) — 19 tools:** Tuned for remote Ubuntu agent hosts (like a Hetzner VPS or home server): Harnesses (`claude-code`, `codex`, `muse`, `antigravity-cli`, `opencode`), TUIs (`boardwalk`, `trailmark`, `openclaw`, `mercadona-cli`), Terminal (`tmux`, `hive`, `gh`, `lazygit`, `fzf`, `delta`, `ripgrep`, `fd`, `jq`, `btop`), and Utilities (`wacli`, `hcloud`). Omits desktop-only GUI/browser tools.
+1. **Full Desktop (`desktop`) — 48 tools:** Every tool in the built-in catalog, across Coding Harnesses, AI TUIs & Personal Tools, Terminal & Session Management, and Agent & CLI Utilities.
+2. **Headless Server / VPS (`server`) — 38 tools:** The desktop set tuned for remote Ubuntu agent hosts (like a Hetzner VPS or home server). It omits ten desktop-oriented tools: `pi`, `gemini-cli`, `copilot-cli`, `quotary`, `codexbar`, `glow`, `browser-use`, `mcporter`, `oracle`, and `summarize`.
 3. **Coding Harnesses Only (`harnesses`) — 8 tools:** `claude-code`, `codex`, `muse`, `antigravity-cli`, `opencode`, `pi`, `gemini-cli`, `copilot-cli`.
-4. **Minimal Core (`minimal`) — 9 tools:** `tmux`, `gh`, `fzf`, `ripgrep`, `jq`, `claude-code`, `codex`, `boardwalk`, `trailmark`.
+4. **Minimal Core (`minimal`) — 10 tools:** `claude-code`, `codex`, `boardwalk`, `trailmark`, `tmux`, `gh`, `fzf`, `ripgrep`, `jq`, `zoxide`.
 
 Selecting a profile queues `[+]` for any missing tools in that profile (without automatically queuing `[-]` removals for extra tools already installed unless the user presses `P` for strict profile sync).
 
