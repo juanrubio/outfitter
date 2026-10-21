@@ -3,9 +3,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/juanrubio/outfitter/internal/catalog"
 	"github.com/juanrubio/outfitter/internal/demo"
@@ -34,20 +31,22 @@ func (opts *options) loadCatalog() (*catalog.Catalog, error) {
 		}
 		return snapshot.Catalog, nil
 	}
-	if opts.catalog != "" {
-		return catalog.Load(opts.catalog)
-	}
-	if opts.deps.HomeDir == "" {
-		return catalog.LoadDefault()
-	}
-	path := filepath.Join(opts.deps.HomeDir, ".config", "outfitter", "catalog.toml")
-	if _, err := os.Stat(path); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return catalog.LoadDefault()
-		}
-		return nil, fmt.Errorf("read user catalog %s: %w", path, err)
-	}
-	return catalog.Load(path)
+	return opts.loadRealCatalog()
+}
+
+// loadRealCatalog loads the catalog selected by the catalog flags and the
+// injected home directory. Catalog administration commands use it directly
+// so demo state never stands in for the real catalog.
+func (opts *options) loadRealCatalog() (*catalog.Catalog, error) {
+	return catalog.LoadWithOptions(catalog.LoadOptions{
+		Path:              opts.catalog,
+		HomeDir:           opts.deps.HomeDir,
+		IgnoreUserCatalog: opts.ignoreUserCatalog,
+	})
+}
+
+func (opts *options) defaultCatalogPath() string {
+	return catalog.DefaultUserCatalogPathForHome(opts.deps.HomeDir)
 }
 
 func (opts *options) localStates(

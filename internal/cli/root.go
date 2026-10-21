@@ -53,10 +53,11 @@ func ExitCode(err error) int {
 }
 
 type options struct {
-	version bool
-	demo    bool
-	catalog string
-	deps    Deps
+	version           bool
+	demo              bool
+	catalog           string
+	ignoreUserCatalog bool
+	deps              Deps
 }
 
 // NewRootCmd builds the root command with production dependencies.
@@ -73,14 +74,22 @@ func NewRootCmdWithDeps(deps Deps) *cobra.Command {
 		Long:          "Outfitter is a keyboard-first TUI and scriptable CLI for installing, inspecting, selecting, and bulk-updating the command-line harnesses and terminal tools used for AI-assisted software development.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			if opts.catalog != "" && opts.ignoreUserCatalog {
+				return &ExitError{Code: 2, Err: fmt.Errorf("--catalog and --ignore-user-catalog cannot be used together")}
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if opts.version {
 				_, err := fmt.Fprintf(cmd.OutOrStdout(), "outfitter version %s\n", Version)
 				return err
 			}
 			return opts.deps.RunTUI(cmd.Context(), tui.Options{
-				Demo:        opts.demo,
-				CatalogPath: opts.catalog,
+				Demo:              opts.demo,
+				CatalogPath:       opts.catalog,
+				HomeDir:           opts.deps.HomeDir,
+				IgnoreUserCatalog: opts.ignoreUserCatalog,
 			})
 		},
 	}
@@ -89,6 +98,7 @@ func NewRootCmdWithDeps(deps Deps) *cobra.Command {
 	})
 	cmd.PersistentFlags().BoolVar(&opts.demo, "demo", false, "run the offline fictional demonstration")
 	cmd.PersistentFlags().StringVar(&opts.catalog, "catalog", "", "path to a user catalog.toml")
+	cmd.PersistentFlags().BoolVar(&opts.ignoreUserCatalog, "ignore-user-catalog", false, "use only the built-in catalog, ignoring any user catalog")
 	cmd.Flags().BoolVar(&opts.version, "version", false, "print version information")
 
 	cmd.AddCommand(

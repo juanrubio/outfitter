@@ -104,19 +104,22 @@ type shadowSudoVerifiedMsg struct {
 // directly and render the model without a real terminal. In live mode,
 // OnRefresh and OnExecute replace the default engine Inspector and Runner.
 type Options struct {
-	Demo           bool
-	CatalogPath    string
-	Width          int
-	Height         int
-	ThemeMode      theme.Mode
-	Catalog        *catalog.Catalog
-	States         map[string]domain.ToolState
-	Actions        map[string]domain.DesiredAction
-	MiseInstalled  bool
-	MiseVersion    string
-	PlatformNotice string
-	OnRefresh      func(context.Context) (map[string]domain.ToolState, error)
-	OnExecute      func(context.Context, domain.ActionPlan, func(engine.StepEvent)) engine.PlanResult
+	Demo        bool
+	CatalogPath string
+	HomeDir     string
+	// IgnoreUserCatalog loads only the built-in catalog.
+	IgnoreUserCatalog bool
+	Width             int
+	Height            int
+	ThemeMode         theme.Mode
+	Catalog           *catalog.Catalog
+	States            map[string]domain.ToolState
+	Actions           map[string]domain.DesiredAction
+	MiseInstalled     bool
+	MiseVersion       string
+	PlatformNotice    string
+	OnRefresh         func(context.Context) (map[string]domain.ToolState, error)
+	OnExecute         func(context.Context, domain.ActionPlan, func(engine.StepEvent)) engine.PlanResult
 	// ShellWarning, when non-empty, is shown as a persistent header line
 	// until the shell fix succeeds. Live launches compute it from the
 	// host shell when unset.
@@ -155,7 +158,7 @@ type Model struct {
 	filter             filterMode
 	query              string
 	editing            bool
-	confirmQuit        bool
+	quitChoice         bool
 	confirmShellFix    bool
 	shellWarning       string
 	onFixShell         func() (string, error)
@@ -249,7 +252,11 @@ func NewModel(opts Options) (*Model, error) {
 	}
 
 	if m.catalog == nil {
-		cat, err := catalog.Load(opts.CatalogPath)
+		cat, err := catalog.LoadWithOptions(catalog.LoadOptions{
+			Path:              opts.CatalogPath,
+			HomeDir:           opts.HomeDir,
+			IgnoreUserCatalog: opts.IgnoreUserCatalog,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +307,9 @@ func NewModel(opts Options) (*Model, error) {
 	if m.platformNotice == "" {
 		m.platformNotice = engine.DetectPlatformNotice()
 	}
-	if _, ok := m.catalog.ProfileByID(m.activeProfileID); !ok && len(m.catalog.Profiles) > 0 {
+	if len(m.catalog.Profiles) == 0 {
+		m.activeProfileID = ""
+	} else if _, ok := m.catalog.ProfileByID(m.activeProfileID); !ok {
 		m.activeProfileID = m.catalog.Profiles[0].ID
 	}
 
@@ -448,17 +457,6 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.editing {
 		return m.updateSearchKey(key)
 	}
-	if m.confirmQuit {
-		switch keystroke {
-		case "q", "y":
-			m.cancelExecution()
-			return m, tea.Quit
-		case "esc", "n":
-			m.confirmQuit = false
-			m.notice = ""
-		}
-		return m, nil
-	}
 	if m.confirmShellFix {
 		m.confirmShellFix = false
 		if keystroke == "y" {
@@ -478,6 +476,8 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.view {
+	case "quit":
+		return m.updateQuitKey(keystroke)
 	case "profiles":
 		return m.updateProfilesKey(key)
 	case "plan":
@@ -516,12 +516,8 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	switch keystroke {
 	case "q":
-		if m.plan.IsEmpty() {
-			m.cancelExecution()
-			return m, tea.Quit
-		}
-		m.confirmQuit = true
-		m.notice = "Unapplied changes in plan. Press q or y again to quit, or Esc to stay."
+		m.view = "quit"
+		m.quitChoice = false
 	case "j", "down":
 		m.moveSelection(1)
 	case "k", "up":
@@ -584,8 +580,12 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.startRefresh()
 	case "c":
-		m.notice = fmt.Sprintf("Catalog: embedded default (%d tools) + ~/.config/outfitter/catalog.toml", len(m.catalog.Tools))
+		m.notice = m.catalogNotice()
 	case "p":
+		if len(m.catalog.Profiles) == 0 {
+			m.notice = "This catalog defines no profiles; all tools are shown."
+			break
+		}
 		m.view = "profiles"
 		m.profileCursor = m.activeProfileIndex()
 	case "]":
@@ -626,6 +626,28 @@ func (m *Model) updateSearchKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.ensureSelection()
+	return m, nil
+}
+
+// updateQuitKey drives the Quit Outfitter? modal: arrows/Tab choose
+// between Cancel (default) and Quit, Enter confirms, y quits at once,
+// Esc/n stays. Mirrors the sibling Boardwalk/Trailmark quit modals.
+func (m *Model) updateQuitKey(keystroke string) (tea.Model, tea.Cmd) {
+	switch keystroke {
+	case "esc", "n":
+		m.view = "catalog"
+	case "left", "right", "up", "down", "tab", "shift+tab":
+		m.quitChoice = !m.quitChoice
+	case "y":
+		m.cancelExecution()
+		return m, tea.Quit
+	case "enter":
+		if m.quitChoice {
+			m.cancelExecution()
+			return m, tea.Quit
+		}
+		m.view = "catalog"
+	}
 	return m, nil
 }
 
@@ -1084,8 +1106,48 @@ func (m *Model) cycleTheme() {
 	m.notice = "Theme: " + string(next)
 }
 
+// catalogNotice describes the effective catalog for the `c` key.
+func (m *Model) catalogNotice() string {
+	meta := m.catalog.Meta
+	counts := fmt.Sprintf("%d tools · %d categories · %d profiles",
+		len(m.catalog.Tools), len(m.catalog.Categories), len(m.catalog.Profiles))
+	switch {
+	case m.demo || meta.Source == catalog.SourceDemo:
+		return fmt.Sprintf("Catalog: demo snapshot (%s)", counts)
+	case meta.Source == catalog.SourceUser && meta.Mode == catalog.ModeReplace:
+		return fmt.Sprintf("Catalog: replace · %s · %s (%s)", meta.EffectiveName(), meta.Path, counts)
+	case meta.Source == catalog.SourceUser:
+		return fmt.Sprintf("Catalog: built-in extended by %s · %s (%s)", meta.EffectiveName(), meta.Path, counts)
+	default:
+		return fmt.Sprintf("Catalog: built-in (%s)", counts)
+	}
+}
+
+// catalogLabel is the compact header label for user catalogs. It is empty
+// for the built-in catalog so the default header is unchanged.
+func (m *Model) catalogLabel() string {
+	meta := m.catalog.Meta
+	switch {
+	case m.demo || meta.Source == catalog.SourceDemo:
+		return "demo"
+	case meta.Source != catalog.SourceUser:
+		return ""
+	case meta.Mode == catalog.ModeReplace:
+		if meta.Name != "" {
+			return "replace · " + meta.Name
+		}
+		return "replace"
+	default:
+		if meta.Name != "" {
+			return "extend · " + meta.Name
+		}
+		return "extend"
+	}
+}
+
 func (m *Model) cycleProfile() {
 	if len(m.catalog.Profiles) == 0 {
+		m.notice = "This catalog defines no profiles; all tools are shown."
 		return
 	}
 	m.profileCursor = (m.activeProfileIndex() + 1) % len(m.catalog.Profiles)
@@ -1612,6 +1674,8 @@ func cloneActions(actions map[string]domain.DesiredAction) map[string]domain.Des
 func (m *Model) render() string {
 	var lines []string
 	switch m.view {
+	case "quit":
+		lines = m.renderQuit()
 	case "profiles":
 		lines = m.renderProfiles()
 	case "plan":

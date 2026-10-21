@@ -29,7 +29,7 @@ Outfitter provides:
 - **Zero-prerequisite bootstrap on Debian/Ubuntu:** Drop the standalone `outfitter` binary onto a fresh Ubuntu or Debian machine, run `outfitter`, and let it bootstrap `~/.local/bin/mise` and your chosen tools cleanly.
 - **Visual selection and bulk updates:** Browse all catalog tools grouped by category, toggle individual tools (`Space`) or entire categories (`g`), apply preset profiles (`p`), mark all outdated tools for update (`u`), and review pending changes before execution (`a`).
 - **Unified version and update discovery:** Detect installed binary path, installed version, and latest upstream version in the background without blocking startup. Borrow `gh auth token` when available to avoid GitHub API rate limits.
-- **User-extensible catalog:** Ship an opinionated built-in catalog embedded in the binary while allowing users to add custom tools, override backends, or define custom profiles in `~/.config/outfitter/catalog.toml`.
+- **User-extensible catalog:** Ship an opinionated built-in catalog embedded in the binary while allowing users to bring their own catalog in `~/.config/outfitter/catalog.toml` (or via `--catalog`): *extend* the built-in catalog with custom tools, backend overrides, or custom profiles, or *replace* it entirely with a catalog of their own (`catalog init`, checked with `catalog validate` / `catalog show`).
 - **Parity between TUI and CLI:** Every action in the TUI (`status`, `install`, `update`, `remove`, `apply`, `catalog`) works as a non-interactive CLI command with `--dry-run`, `--yes`, and `--json` for scripts and provisioning pipelines.
 
 ### Non-Goals (Deferred to v2)
@@ -46,7 +46,7 @@ Outfitter does not reinvent package downloading where `mise` / `aqua` already ex
 
 ```mermaid
 flowchart TD
-    Catalog["Merged Catalog\n(Embedded Defaults + ~/.config/outfitter/catalog.toml)"]
+    Catalog["Effective Catalog\n(Embedded Defaults, extended by or replaced by ~/.config/outfitter/catalog.toml)"]
     Planner["State & Version Inspector\n(Cached snapshot + concurrent upstream check)"]
     Queue["Action Plan\n(Install / Update / Remove queue)"]
 
@@ -139,14 +139,39 @@ Outfitter ships with 28 curated tools across 4 categories and 4 preset profiles:
 
 ## 5. User Catalog & Configuration (`catalog.toml`)
 
-Users can inspect, extend, or override the catalog in `~/.config/outfitter/catalog.toml`.
+Users can inspect, extend, or replace the catalog in `~/.config/outfitter/catalog.toml`. A user catalog may start with a self-describing header:
 
-### 5.1 Merging Rules
+```toml
+[catalog]
+schema_version = 1
+mode = "extend"        # or "replace"
+name = "Workstation"   # optional
+```
+
+`schema_version` defaults to 1 and must be positive and no newer than this build supports. `mode` is case-insensitive. A file without a header (or without `mode`) is an *extend* catalog, so overlays written before headers existed keep working. Header-bearing files are validated strictly: unknown keys anywhere in the document are rejected.
+
+### 5.1 Composition Rules
+
+**Extend mode** merges the user file over the embedded catalog:
+
 1. Outfitter loads its embedded default catalog first.
 2. If `~/.config/outfitter/catalog.toml` exists, Outfitter merges it by tool `id`:
    - Matching `id`: overrides any specified fields (e.g., pinning a `version`, changing `backend` from `mise:ubi` to `source`, or adding it to a profile). Setting `disabled = true` hides a built-in tool.
-   - New `id`: appends the user's custom tool to the specified `category` (or a `Custom` category).
-3. Users can also pass `--catalog /path/to/catalog.toml` to share team or machine-specific catalogs in a dotfiles repo.
+   - New `id`: appends the user's custom tool to the specified `category` (inferred when undeclared, `utilities` by default).
+3. Deleting an entry from an extend catalog only removes the override; the built-in value returns. `disabled = true` is how a built-in tool is hidden in extend mode.
+
+**Replace mode** makes the user file the entire catalog:
+
+1. Loading starts from an empty catalog with only field-wise settings defaults. Built-in tools, categories, and profiles — and unspecified fields of same-`id` built-ins — are never inherited.
+2. The document uses the same grammar as extend mode (`[settings]`, `[[categories]]`, `[[tools]]`, and profiles as `[profiles.<name>]` tables or `[[profiles]]` entries). Categories may be inferred from tools and profiles may be omitted entirely; tools get the same default name, category, version arguments, and derived backend commands as custom extend tools.
+3. Deleting an entry deletes it. Validation is strict: duplicate or invalid IDs, missing `binary`/`backend`, invalid `version_regex`, missing `package` for `mise`/`uv`/`apt` tools, `source` tools with neither `source_dir` nor `build_cmd`, `vendor` tools without effective install/update/remove commands, dangling profile↔tool references, an empty `install_dir`, and a catalog with zero active tools are all errors.
+
+Selection and recovery:
+
+- Users can pass `--catalog /path/to/catalog.toml` to share team or machine-specific catalogs in a dotfiles repo (or symlink a dotfiles file to the default path).
+- `catalog init` writes a replacement catalog seeded from the complete built-in catalog; `--blank` writes an unusable-until-edited skeleton, `--extend` writes a no-op overlay, and `--output`/`--force` (keeping a `.bak` backup) control placement.
+- `catalog show` reports the effective catalog's name, schema, mode, origin, path, and counts; `catalog validate [path]` checks a file without inspecting tools; `catalog export` prints the raw embedded catalog (which, having no header, would load as an extend overlay if saved as a user catalog).
+- A malformed user catalog is an error, never a silent fallback. `catalog init`/`validate`/`export` remain usable to repair it, and `--ignore-user-catalog` runs against the built-in catalog alone. `--catalog` together with `--ignore-user-catalog` is a usage error (exit 2).
 
 ### 5.2 Example `~/.config/outfitter/catalog.toml`
 ```toml
@@ -207,7 +232,11 @@ outfitter profile apply <name> [--dry-run] [--yes]  # Install all tools in a pro
 outfitter install <tool-id>... [--dry-run] [--yes] [--remove-strays]  # Install specific tools
 outfitter update [<tool-id>...] [--all] [--dry-run] [--yes] [--remove-strays]  # Bulk-update outdated tools
 outfitter remove <tool-id>... [--dry-run] [--yes]   # Uninstall specific tools
-outfitter catalog export > catalog.toml    # Export the built-in catalog as a template
+outfitter catalog init [--blank|--extend] [--output <path>] [--force]  # Write a starter user catalog (seeded replacement by default)
+outfitter catalog show [--json]            # Show the effective catalog's mode, origin, path, and counts
+outfitter catalog validate [<path>] [--json]  # Validate a catalog (exit 1 when invalid, 2 on usage errors)
+outfitter catalog export > catalog.toml    # Print the raw built-in catalog
+outfitter --ignore-user-catalog status     # Bypass a broken user catalog and use the built-in catalog
 ```
 
 ### Exit Codes

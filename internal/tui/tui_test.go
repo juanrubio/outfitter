@@ -781,36 +781,72 @@ func TestPlanEmptyStateAndHelp(t *testing.T) {
 	}
 }
 
-func TestQuitConfirmation(t *testing.T) {
+func TestQuitModal(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	m, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// The demo starts with pending changes: q opens the modal with a
+	// warning instead of quitting, Cancel focused by default.
 	cmd := pressKey(m, 'q', "q")
-	if cmd != nil || !m.confirmQuit {
-		t.Fatal("q with pending changes should prompt, not quit")
+	if cmd != nil || m.view != "quit" {
+		t.Fatalf("q should open the quit modal (cmd=%v, view=%q)", cmd, m.view)
 	}
-	if !strings.Contains(m.notice, "Unapplied changes in plan") {
-		t.Fatalf("quit notice = %q", m.notice)
+	screen := m.View().Content
+	for _, marker := range []string{"Quit Outfitter?", "Unapplied plan changes will be discarded.", "> Cancel", "Quit"} {
+		if !strings.Contains(screen, marker) {
+			t.Errorf("quit modal missing %q", marker)
+		}
 	}
+	if m.quitChoice {
+		t.Fatal("Cancel should be the default choice")
+	}
+
+	// Esc cancels back to the catalog.
 	pressKey(m, tea.KeyEscape, "")
-	if m.confirmQuit {
-		t.Fatal("Esc did not cancel quit confirmation")
+	if m.view != "catalog" {
+		t.Fatalf("Esc view = %q, want catalog", m.view)
 	}
 
-	pressKey(m, 'x', "x")
-	cmd = pressKey(m, 'q', "q")
-	if cmd == nil {
-		t.Fatal("q with a clean plan should quit immediately")
-	}
-
-	m.actions["codex"] = domain.ActionUpdate
-	m.rebuildPlan()
+	// Enter on the default Cancel also returns to the catalog.
 	pressKey(m, 'q', "q")
+	cmd = pressKey(m, tea.KeyEnter, "")
+	if cmd != nil || m.view != "catalog" {
+		t.Fatalf("Enter on Cancel should stay (cmd=%v, view=%q)", cmd, m.view)
+	}
+
+	// Clean plan: the modal still opens (no warning), y quits from it.
+	pressKey(m, 'x', "x")
+	pressKey(m, 'q', "q")
+	if m.view != "quit" {
+		t.Fatalf("q with a clean plan view = %q, want quit modal", m.view)
+	}
+	if strings.Contains(m.View().Content, "Unapplied plan changes") {
+		t.Fatal("clean plan should not show the discard warning")
+	}
 	cmd = pressKey(m, 'y', "y")
 	if cmd == nil {
-		t.Fatal("y during quit confirmation should quit")
+		t.Fatal("y in the quit modal should quit")
+	}
+
+	// Tab moves the choice to Quit; Enter then quits.
+	m2, err := NewModel(Options{Demo: true, Width: 120, Height: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pressKey(m2, 'q', "q")
+	pressKey(m2, tea.KeyTab, "")
+	if !m2.quitChoice {
+		t.Fatal("Tab should move the choice to Quit")
+	}
+	if !strings.Contains(m2.View().Content, "> Quit") {
+		t.Fatal("Quit button should be focused after Tab")
+	}
+	cmd = pressKey(m2, tea.KeyEnter, "")
+	if cmd == nil {
+		t.Fatal("Enter on Quit should quit")
 	}
 }
 
@@ -838,6 +874,7 @@ func TestAllViewsScreenGeometry(t *testing.T) {
 		}},
 		{"help", func(m *Model) { pressKey(m, '?', "?") }},
 		{"detail", func(m *Model) { m.view = "detail" }},
+		{"quit", func(m *Model) { pressKey(m, 'q', "q") }},
 	}
 	for _, size := range sizes {
 		for _, view := range views {

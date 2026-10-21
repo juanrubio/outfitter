@@ -23,6 +23,7 @@ var defaultCatalogTOML string
 
 // Catalog is the merged, active catalog used by the TUI and CLI.
 type Catalog struct {
+	Meta       Meta              `json:"meta"`
 	Settings   domain.Settings   `json:"settings"`
 	Categories []domain.Category `json:"categories"`
 	Profiles   []domain.Profile  `json:"profiles"`
@@ -67,7 +68,35 @@ func DefaultUserCatalogPath() string {
 	if err != nil || home == "" {
 		return ""
 	}
+	return DefaultUserCatalogPathForHome(home)
+}
+
+// DefaultUserCatalogPathForHome returns the conventional per-user catalog
+// path under the given home directory.
+func DefaultUserCatalogPathForHome(home string) string {
+	if home == "" {
+		return ""
+	}
 	return filepath.Join(home, ".config", "outfitter", "catalog.toml")
+}
+
+func embeddedMeta() Meta {
+	return Meta{
+		SchemaVersion: CurrentSchemaVersion,
+		Mode:          ModeBuiltin,
+		Source:        SourceEmbedded,
+		UsesBuiltin:   true,
+	}
+}
+
+func resolvePath(path string) string {
+	if path == "" {
+		return ""
+	}
+	if absolute, err := filepath.Abs(path); err == nil {
+		return absolute
+	}
+	return path
 }
 
 // ExportDefault returns the raw embedded default catalog.
@@ -81,90 +110,193 @@ func LoadDefault() (*Catalog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse embedded catalog: %w", err)
 	}
+	cat.Meta = embeddedMeta()
 	return cat, nil
 }
 
 // ParseCatalog parses a complete catalog TOML document, applies defaults, and
-// validates the resulting catalog. It never merges the embedded defaults.
+// validates the resulting catalog. It never merges the embedded defaults: a
+// missing piece comes only from field-wise defaults, so the document must
+// describe a whole catalog (including at least one active tool).
 func ParseCatalog(data []byte) (*Catalog, error) {
-	var raw defaultFile
-	if err := toml.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("parse catalog: %w", err)
-	}
-
-	settings := domain.DefaultSettings()
-	if raw.Settings != nil {
-		settings = *raw.Settings
-		if settings.InstallDir == "" {
-			settings.InstallDir = domain.DefaultInstallDir
-		}
-	}
-
-	cat := &Catalog{
-		Settings:   settings,
-		Categories: append([]domain.Category(nil), raw.Categories...),
-		Profiles:   append([]domain.Profile(nil), raw.Profiles...),
-		Tools:      append([]domain.Tool(nil), raw.Tools...),
-	}
-	if err := finalizeCatalog(cat); err != nil {
+	doc, err := parseDocument(data, "parse catalog")
+	if err != nil {
 		return nil, err
+	}
+	if err := checkUnknownKeys(doc.rawDoc); err != nil {
+		return nil, err
+	}
+	cat, err := buildStandaloneCatalog(doc.raw)
+	if err != nil {
+		return nil, err
+	}
+	cat.Meta = Meta{
+		SchemaVersion: doc.header.SchemaVersion,
+		Mode:          ModeReplace,
+		Name:          doc.header.Name,
+		Source:        SourceUser,
+		UsesBuiltin:   false,
+	}
+	if doc.header.Present {
+		cat.Meta.Mode = doc.header.Mode
 	}
 	return cat, nil
 }
 
-// Load loads the embedded catalog and, when present, merges a user catalog.
-// An empty path uses ~/.config/outfitter/catalog.toml if it exists.
-func Load(userCatalogPath string) (*Catalog, error) {
-	if userCatalogPath == "" {
-		path := DefaultUserCatalogPath()
-		if path == "" {
-			return LoadDefault()
-		}
+// LoadOptions selects which user catalog (if any) is composed with the
+// embedded defaults.
+type LoadOptions struct {
+	// Path is an explicit user catalog path. It must exist.
+	Path string
+	// HomeDir overrides the home directory used to locate the default
+	// user catalog. Empty means the process home directory.
+	HomeDir string
+	// IgnoreUserCatalog returns the embedded catalog without reading any
+	// user catalog, even when Path is empty and a default file exists.
+	IgnoreUserCatalog bool
+}
+
+// LoadWithOptions loads the effective catalog for the given options.
+func LoadWithOptions(opts LoadOptions) (*Catalog, error) {
+	if opts.IgnoreUserCatalog {
+		return LoadDefault()
+	}
+	if opts.Path != "" {
+		path := resolvePath(opts.Path)
 		data, err := os.ReadFile(path)
-		if errors.Is(err, os.ErrNotExist) {
-			return LoadDefault()
-		}
 		if err != nil {
 			return nil, fmt.Errorf("read user catalog %s: %w", path, err)
 		}
-		return LoadFromBytes(data)
+		return loadFromBytes(data, path)
 	}
 
-	data, err := os.ReadFile(userCatalogPath)
-	if err != nil {
-		return nil, fmt.Errorf("read user catalog %s: %w", userCatalogPath, err)
+	home := opts.HomeDir
+	if home == "" {
+		detected, err := os.UserHomeDir()
+		if err != nil {
+			return LoadDefault()
+		}
+		home = detected
 	}
-	return LoadFromBytes(data)
+	path := DefaultUserCatalogPathForHome(home)
+	if path == "" {
+		return LoadDefault()
+	}
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return LoadDefault()
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read user catalog %s: %w", path, err)
+	}
+	return loadFromBytes(data, resolvePath(path))
 }
 
-// LoadFromBytes loads the embedded catalog and merges the supplied user TOML.
+// Load loads the embedded catalog and, when present, composes a user catalog
+// with it. An empty path uses ~/.config/outfitter/catalog.toml if it exists.
+func Load(userCatalogPath string) (*Catalog, error) {
+	return LoadWithOptions(LoadOptions{Path: userCatalogPath})
+}
+
+// LoadFromBytes composes the supplied user TOML: "extend" documents merge
+// over the embedded catalog, "replace" documents stand alone. Empty input
+// yields the embedded catalog.
 func LoadFromBytes(userTOML []byte) (*Catalog, error) {
+	return loadFromBytes(userTOML, "")
+}
+
+func loadFromBytes(userTOML []byte, path string) (*Catalog, error) {
+	if len(bytes.TrimSpace(userTOML)) == 0 {
+		return LoadDefault()
+	}
+
+	doc, err := parseDocument(userTOML, "parse user catalog")
+	if err != nil {
+		return nil, err
+	}
+	// Header-bearing files are schema-bearing: reject unknown keys so a
+	// typo cannot silently no-op. Legacy headerless overlays keep the
+	// historical lenient behavior.
+	if doc.header.Present {
+		if err := checkUnknownKeys(doc.rawDoc); err != nil {
+			return nil, err
+		}
+	}
+
+	meta := Meta{
+		SchemaVersion: doc.header.SchemaVersion,
+		Mode:          doc.header.Mode,
+		Name:          doc.header.Name,
+		Source:        SourceUser,
+		Path:          path,
+		UsesBuiltin:   doc.header.Mode == ModeExtend,
+	}
+
+	if doc.header.Mode == ModeReplace {
+		cat, err := buildStandaloneCatalog(doc.raw)
+		if err != nil {
+			return nil, err
+		}
+		cat.Meta = meta
+		return cat, nil
+	}
+
 	cat, err := LoadDefault()
 	if err != nil {
 		return nil, err
 	}
-	if len(bytes.TrimSpace(userTOML)) == 0 {
-		return cat, nil
+	if err := mergeUserCatalog(cat, doc.raw); err != nil {
+		return nil, err
 	}
+	if err := finalizeCatalog(cat); err != nil {
+		return nil, err
+	}
+	cat.Meta = meta
+	return cat, nil
+}
 
-	var raw userFile
-	if err := toml.Unmarshal(userTOML, &raw); err != nil {
-		return nil, fmt.Errorf("parse user catalog: %w", err)
+type document struct {
+	raw    userFile
+	rawDoc map[string]any
+	header catalogHeader
+}
+
+func parseDocument(data []byte, parseLabel string) (*document, error) {
+	var rawDoc map[string]any
+	if err := toml.Unmarshal(data, &rawDoc); err != nil {
+		return nil, fmt.Errorf("%s: %w", parseLabel, err)
 	}
+	var raw userFile
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("%s: %w", parseLabel, err)
+	}
+	header, err := parseHeader(rawDoc)
+	if err != nil {
+		return nil, err
+	}
+	return &document{raw: raw, rawDoc: rawDoc, header: header}, nil
+}
+
+// buildStandaloneCatalog builds a complete catalog from one document,
+// starting from field-wise settings defaults only. It reuses the overlay
+// builder against an empty base, so tools get the same default name,
+// category, version arguments, and derived backend commands as custom
+// overlay tools, with no inheritance from same-ID built-ins.
+func buildStandaloneCatalog(raw userFile) (*Catalog, error) {
+	if err := checkDuplicateIDs(raw); err != nil {
+		return nil, err
+	}
+	cat := &Catalog{Settings: domain.DefaultSettings()}
 	if err := mergeUserCatalog(cat, raw); err != nil {
+		return nil, err
+	}
+	if err := validateStandaloneCatalog(cat); err != nil {
 		return nil, err
 	}
 	if err := finalizeCatalog(cat); err != nil {
 		return nil, err
 	}
 	return cat, nil
-}
-
-type defaultFile struct {
-	Settings   *domain.Settings  `toml:"settings"`
-	Categories []domain.Category `toml:"categories"`
-	Profiles   []domain.Profile  `toml:"profiles"`
-	Tools      []domain.Tool     `toml:"tools"`
 }
 
 type userFile struct {
@@ -377,6 +509,9 @@ func addUserTool(cat *Catalog, id string, raw userTool) (domain.Tool, error) {
 		Sudo:       backend == domain.BackendAPT,
 	}
 	applyOptionalFields(&tool, raw)
+	if raw.VersionArgs == nil {
+		tool.VersionArgs = []string{"--version"}
+	}
 	finalizeToolCommands(&tool, raw, true, true)
 	return tool, nil
 }

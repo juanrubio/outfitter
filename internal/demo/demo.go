@@ -267,6 +267,8 @@ func Load() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("load demo catalog: %w", err)
 	}
+	cat.Meta.Source = catalog.SourceDemo
+	cat.Meta.Path = ""
 
 	states := make(map[string]domain.ToolState, len(cat.Tools))
 	for _, tool := range cat.Tools {

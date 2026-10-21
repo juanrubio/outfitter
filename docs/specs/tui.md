@@ -127,6 +127,10 @@ Pressing `p` opens the **Profile Selector** overlay, allowing you to outfit a ma
 
 Selecting a profile queues `[+]` for any missing tools in that profile (without automatically queuing `[-]` removals for extra tools already installed unless the user presses `P` for strict profile sync).
 
+The selector lists whatever profiles the effective catalog defines — built-in, extend, and replacement catalogs alike. A replacement catalog may define no profiles at all: then no profile is active, the header labels the profile as **All tools**, and pressing `p` shows a notice ("This catalog defines no profiles; all tools are shown.") instead of an empty selector. When profiles exist but the default `desktop` profile does not, the first profile in the catalog starts active.
+
+The header also identifies the catalog in effect. On wide terminals a compact label follows `OUTFITTER` for user catalogs and the demo (`[extend · <name>]`, `[replace · <name>]`, `[demo]`; the built-in catalog carries no label). Pressing `c` shows the full catalog source: demo snapshot, built-in, or the extend/replace user file with its name, path, and tool/category/profile counts.
+
 ### 4.3 Plan & Apply Dry-Run Screen (`a`)
 
 Pressing `a` opens the **Plan & Apply** confirmation screen before any command runs:
@@ -167,7 +171,7 @@ When launched on a fresh Debian/Ubuntu machine where `~/.local/bin/mise` is not 
 | `u` | Global | Queue updates (`[↑]`) for **all** outdated tools |
 | `U` | Catalog list | Queue update (`[↑]`) for the currently focused tool only |
 | `g` | Catalog list | Toggle all tools in the focused category |
-| `p` | Global | Open **Profile Selector** (`Full Desktop`, `Headless Server`, `Harnesses Only`, `Minimal`) |
+| `p` | Global | Open **Profile Selector** for the effective catalog's profiles (notice only when the catalog defines none) |
 | `a` | Global | Open **Plan & Apply** review screen to confirm and run queued changes |
 | `x` | Global | Reset/clear all pending changes in the current plan |
 | `f` | Global | Cycle view filter: `All` → `Installed` → `Outdated` → `Pending Changes` → `Not Installed` |
@@ -175,11 +179,11 @@ When launched on a fresh Debian/Ubuntu machine where `~/.local/bin/mise` is not 
 | `r` | Global | Refresh installed states and upstream version checks |
 | `B` | Global | Fix mise shell integration (confirmed; appends the marked `mise activate` block to the shell rc) |
 | `S` | Global | Remove all shadowed binaries (confirmed; status bar shows `⚠ N shadowed` while any exist; sudo pre-flight for system paths) |
-| `c` | Global | View Catalog sources (`Embedded default` + `~/.config/outfitter/catalog.toml`) |
+| `c` | Global | View the effective catalog source (built-in, demo, or extend/replace user catalog with name, path, and counts) |
 | `Enter` | Compact / Plan | Open tool detail card (in `80×24` mode) or confirm Apply (in Plan modal) |
 | `s` | Plan modal | Toggle removing stray binaries after applying (opt-in per plan; succeeded steps only) |
 | `?` | Global | Toggle keyboard help overlay |
-| `q` | Global | Quit Outfitter (prompts for confirmation if a Pending Plan has unapplied changes) |
+| `q` | Global | Open the **Quit Outfitter?** confirmation modal (Cancel/Quit buttons; warns when a Pending Plan has unapplied changes) |
 
 ---
 

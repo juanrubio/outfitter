@@ -59,14 +59,35 @@ outfitter profile apply server --yes       # bootstrap a headless VPS profile no
 outfitter install claude-code codex --yes  # install specific tools
 outfitter update --all --yes               # bulk-update every outdated tool
 outfitter remove aider --yes               # uninstall specific tools
-outfitter catalog export > ~/.config/outfitter/catalog.toml
+outfitter catalog show                     # which catalog is in effect (built-in, extend, or replace)
+outfitter catalog validate                 # check your catalog.toml without touching any tools
 ```
 
 Every mutating command first builds the ordered execution plan. Preview safely with `--dry-run`; in scripts, pass `--yes` to confirm (without it, a piped command that would modify your system prints the dry-run plan and exits with code `2`). Add `--json` when a script needs structured machine-readable output.
 
 ## Customizing your catalog (`catalog.toml`)
 
-Outfitter ships with **48 curated tools** across 4 categories and 4 profiles (`desktop`, `server`, `harnesses`, `minimal`). You can override any built-in tool, add your own tools, or define custom machine profiles in `~/.config/outfitter/catalog.toml` (or pass `--catalog /path/to/catalog.toml` from your dotfiles repository):
+Outfitter ships with a built-in catalog of **48 curated tools** across 4 categories and 4 profiles (`desktop`, `server`, `harnesses`, `minimal`), embedded in the binary. There is nothing to generate before your first run: Outfitter works out of the box with those defaults.
+
+A **user catalog** is optional. Use one only when you want to override a built-in tool, add your own tools, disable a tool, or define a custom profile. A user catalog declares how it combines with the built-in catalog in an optional header:
+
+```toml
+[catalog]
+schema_version = 1
+mode = "extend"        # or "replace"
+name = "Workstation"   # optional label shown by `catalog show` and the TUI
+```
+
+Files without a header are treated as `extend`, so existing overlays keep working. There are two ways to create a user catalog.
+
+### Option A — Extend: write a small overlay (recommended for a few tweaks)
+
+Run `outfitter catalog init --extend`, or create `~/.config/outfitter/catalog.toml` by hand containing only your changes. Outfitter picks this file up automatically when it exists. At startup it loads the built-in catalog first, then merges your file over it by tool `id`:
+
+- A `[[tools]]` entry whose `id` matches a built-in tool overrides only the fields you specify; everything else keeps the built-in value.
+- An entry with a new `id` adds your tool to the catalog.
+- An entry with `disabled = true` hides a built-in tool.
+- A `[profiles.<name>]` table adds (or replaces) a machine profile.
 
 ```toml
 # Override a built-in tool to build from local source while developing
@@ -93,6 +114,43 @@ name = "VPS Worker"
 short = "VPS"
 description = "Headless agent worker for Hetzner VPS"
 tools = ["tmux", "gh", "claude-code", "codex", "openclaw", "boardwalk", "ripgrep", "jq"]
+```
+
+Because the overlay is merged at every startup, it keeps tracking future built-in defaults for everything you did not specify. Note that deleting an entry from an extend catalog only removes your override — the built-in tool comes back. To hide a built-in tool in extend mode, keep an entry with `disabled = true`.
+
+### Option B — Replace: own the whole catalog
+
+To maintain a complete catalog of your own — only your tools, nothing inherited — create a replacement catalog:
+
+```sh
+outfitter catalog init     # seeded from the complete built-in catalog
+```
+
+This writes `~/.config/outfitter/catalog.toml` with a `mode = "replace"` header plus every built-in setting, category, profile, and tool (it refuses to overwrite an existing file; `--force` keeps the old file as a `.bak` sibling, and `--output PATH` writes elsewhere). Edit it down to the tools you actually want: in replace mode, the file is the whole catalog, so **deleting an entry really deletes it**, and built-in tools, categories, and profiles are never merged in. Prefer starting empty? `outfitter catalog init --blank` writes a skeleton with commented examples — but a replacement catalog needs at least one active tool, so it stays unusable until you add a `[[tools]]` entry.
+
+For a dotfiles-managed catalog, write it anywhere and select it explicitly (note that `--catalog` is a global flag), or symlink it to the default path:
+
+```sh
+outfitter catalog init --output ~/dotfiles/outfitter-catalog.toml
+outfitter --catalog ~/dotfiles/outfitter-catalog.toml status
+# or: ln -s ~/dotfiles/outfitter-catalog.toml ~/.config/outfitter/catalog.toml
+```
+
+Without `--catalog`, only `~/.config/outfitter/catalog.toml` is picked up automatically. Keep in mind that a seeded replacement freezes today's built-in values: after an Outfitter upgrade it will not pick up new built-in tools or changed defaults — prefer Option A unless you really want to own the whole catalog. (`outfitter catalog export` prints the raw built-in catalog for inspection; on its own it has no header, so saving it as your user catalog would make it an extend overlay, not a replacement — use `catalog init` for that.)
+
+### Checking your catalog
+
+```sh
+outfitter catalog validate   # parse and validate the selected catalog (or: validate <path>)
+outfitter catalog show       # effective catalog: mode, origin, path, and tool/category/profile counts
+outfitter profile list       # built-in and custom profiles
+outfitter status             # every tool in the effective catalog
+```
+
+If the user catalog cannot be parsed or fails validation, Outfitter reports an error instead of silently falling back to the defaults. `catalog validate`, `catalog init`, and `catalog export` still work so you can inspect and fix the file, and `--ignore-user-catalog` runs any command against the built-in catalog alone as an escape hatch:
+
+```sh
+outfitter --ignore-user-catalog status
 ```
 
 ## Good to know

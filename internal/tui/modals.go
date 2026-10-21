@@ -7,6 +7,51 @@ import (
 	"github.com/juanrubio/outfitter/internal/domain"
 )
 
+// renderQuit is the Quit Outfitter? confirmation modal, following the
+// profiles screen layout: header, centered box, footer hints.
+func (m *Model) renderQuit() []string {
+	lines := m.headerLines("Quit Outfitter")
+	bodyHeight := m.height - len(lines) - 2
+	if bodyHeight < 1 {
+		bodyHeight = 1
+	}
+	boxWidth := minInt(m.width-4, 46)
+	if boxWidth < 10 {
+		boxWidth = maxInt(m.width, 10)
+	}
+	lines = append(lines, m.centerBlock(m.quitBox(boxWidth), boxWidth, bodyHeight)...)
+	lines = append(lines, m.footerLines("←→/Tab Choose   Enter Confirm   Esc Cancel", "")...)
+	return lines
+}
+
+func (m *Model) quitBox(width int) []string {
+	content := [][]span{
+		{{text: "Quit Outfitter?", token: "text", bold: true}},
+		nil,
+	}
+	if !m.plan.IsEmpty() {
+		content = append(content,
+			[]span{{text: "Unapplied plan changes will be discarded.", token: "low"}},
+			nil,
+		)
+	}
+	cancel := span{text: "[  Cancel  ]", token: "muted"}
+	quit := span{text: "[  Quit  ]", token: "muted"}
+	if m.quitChoice {
+		quit = span{text: "[> Quit  ]", token: "accent", bold: true}
+	} else {
+		cancel = span{text: "[> Cancel  ]", token: "accent", bold: true}
+	}
+	content = append(content, []span{cancel, {text: "   ", token: "muted"}, quit})
+
+	lines := []string{m.boxTop("QUIT OUTFITTER?", width, "accent")}
+	for _, spans := range content {
+		lines = append(lines, m.boxContentLine(spans, width))
+	}
+	lines = append(lines, m.boxBottom(width))
+	return lines
+}
+
 func (m *Model) renderProfiles() []string {
 	lines := m.headerLines("Profiles · Select an outfit profile")
 	bodyHeight := m.height - len(lines) - 2

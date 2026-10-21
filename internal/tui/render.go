@@ -170,11 +170,17 @@ func (m *Model) headerLines(barTitle string) []string {
 	}
 
 	profileName := "Full Desktop"
+	if len(m.catalog.Profiles) == 0 || m.activeProfileID == "" {
+		profileName = "All tools"
+	}
 	if profile, ok := m.catalog.ProfileByID(m.activeProfileID); ok {
 		profileName = profile.Name
 	}
 
 	headerLeft := []span{{text: "OUTFITTER", token: "accent", bold: true}}
+	if label := m.catalogLabel(); label != "" && m.width >= 96 {
+		headerLeft = append(headerLeft, span{text: "  [" + label + "]", token: "accent"})
+	}
 	miseStatus := "mise " + m.miseVersion + " ready"
 	if !m.miseInstalled {
 		miseStatus = "mise missing (auto-bootstrap queued)"
@@ -187,6 +193,9 @@ func (m *Model) headerLines(barTitle string) []string {
 		headerLeft = append(headerLeft, span{text: fmt.Sprintf("  Profile: %s · %s", profileName, miseStatus), token: token})
 	} else {
 		shortProfile := "Desktop"
+		if len(m.catalog.Profiles) == 0 || m.activeProfileID == "" {
+			shortProfile = "All tools"
+		}
 		if profile, ok := m.catalog.ProfileByID(m.activeProfileID); ok && profile.Short != "" {
 			shortProfile = profile.Short
 		}
@@ -241,9 +250,6 @@ func (m *Model) headerLines(barTitle string) []string {
 	}
 	if m.notice != "" {
 		token := "accent"
-		if m.confirmQuit {
-			token = "low"
-		}
 		lines = append(lines, m.renderSpans([]span{{text: truncateDisplay(m.notice, m.width), token: token, bold: true}}, m.width, ""))
 	}
 	lines = append(lines, m.renderSpans([]span{{text: strings.Repeat("─", m.width), token: "border"}}, m.width, ""))
