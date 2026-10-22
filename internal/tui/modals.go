@@ -109,6 +109,98 @@ func (m *Model) selfUpdateBox(width int) []string {
 	return lines
 }
 
+// renderShadows is the Shadowed Binaries selection modal. Unlike the
+// old count-only confirmation, it names every binary that would be
+// deleted and lets the user uncheck individual entries first.
+func (m *Model) renderShadows() []string {
+	lines := m.headerLines("Shadowed Binaries · Choose unmanaged copies to remove")
+	bodyHeight := m.height - len(lines) - 2
+	if bodyHeight < 1 {
+		bodyHeight = 1
+	}
+	boxWidth := minInt(m.width-4, 104)
+	if boxWidth < 10 {
+		boxWidth = maxInt(m.width, 10)
+	}
+	boxHeight := minInt(bodyHeight, 28)
+	if boxHeight < 5 {
+		boxHeight = minInt(bodyHeight, 5)
+	}
+	lines = append(lines, m.centerBlock(m.shadowBox(boxWidth, boxHeight), boxWidth, bodyHeight)...)
+	lines = append(lines, m.footerLines("↑↓ Select · Space Toggle · a All/None · Enter Remove · Esc Cancel", "")...)
+	return lines
+}
+
+func shadowVersionText(version string) string {
+	if version == "" {
+		return "unknown"
+	}
+	return version
+}
+
+func (m *Model) shadowBox(width, height int) []string {
+	innerWidth := maxInt(width-4, 1)
+	innerHeight := maxInt(height-2, 1)
+	entries := m.shadowEntries()
+	selected := len(m.selectedShadowEntries())
+
+	content := make([][]span, 0, innerHeight)
+	content = append(content, []span{{text: "These binaries on PATH hide the managed versions. Uncheck any you want to keep:", token: "muted"}})
+
+	// Reserve the intro and summary lines; each entry takes two lines.
+	visible := maxInt((innerHeight-2)/2, 1)
+	start := 0
+	if m.shadowCursor >= visible {
+		start = m.shadowCursor - visible + 1
+	}
+	if maxStart := maxInt(len(entries)-visible, 0); start > maxStart {
+		start = maxStart
+	}
+	end := minInt(start+visible, len(entries))
+	for index := start; index < end; index++ {
+		entry := entries[index]
+		focused := index == m.shadowCursor
+		cursor := "  "
+		if focused {
+			cursor = "› "
+		}
+		checkbox := "[ ]"
+		if m.shadowSelectedFor(entry.tool.ID) {
+			checkbox = "[x]"
+		}
+		token := "text"
+		if focused {
+			token = "accent"
+		}
+		title := fmt.Sprintf("%s%s %s (%s)", cursor, checkbox, entry.tool.Name, entry.tool.ID)
+		content = append(content, []span{{text: truncateDisplay(title, innerWidth), token: token, bold: focused}})
+		detail := fmt.Sprintf("      %s (%s) shadows managed %s · remove: $ %s",
+			entry.state.ShadowedBy,
+			shadowVersionText(entry.state.ShadowVersion),
+			shadowVersionText(entry.state.InstalledVersion),
+			entry.state.ShadowRemovalCommand())
+		content = append(content, []span{{text: truncateDisplay(detail, innerWidth), token: "muted"}})
+	}
+	summary := fmt.Sprintf("%d of %d selected · sudo may prompt for system paths", selected, len(entries))
+	if end < len(entries) {
+		summary += fmt.Sprintf(" · %d more below", len(entries)-end)
+	}
+	for len(content) < innerHeight-1 {
+		content = append(content, nil)
+	}
+	if len(content) > innerHeight-1 {
+		content = content[:innerHeight-1]
+	}
+	content = append(content, []span{{text: truncateDisplay(summary, innerWidth), token: "low", bold: true}})
+
+	lines := []string{m.boxTop("SHADOWED BINARIES (S)", width, "accent")}
+	for _, spans := range content {
+		lines = append(lines, m.boxContentLine(spans, width))
+	}
+	lines = append(lines, m.boxBottom(width))
+	return lines
+}
+
 func (m *Model) renderProfiles() []string {
 	lines := m.headerLines("Profiles · Select an outfit profile")
 	bodyHeight := m.height - len(lines) - 2
@@ -589,7 +681,7 @@ func (m *Model) helpBox(width, height int) []string {
 		{"x", "Reset/clear all pending actions in the current plan"},
 		{"f", "Cycle filter: All → Outdated → Pending → Installed → Not Installed"},
 		{"/", "Incremental search by tool name, binary, backend, package, or description"},
-		{"b / B / S / O", "Bootstrap demo / fix shell / remove shadowed / update Outfitter"},
+		{"b / B / S / O", "Bootstrap demo / fix shell / choose shadowed / update Outfitter"},
 		{"r", "Refresh installed binary checks and upstream version readings"},
 		{"Esc / q", "Close active overlay or return to the catalog desk"},
 	}

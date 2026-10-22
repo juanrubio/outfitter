@@ -164,6 +164,10 @@ When launched on a fresh Debian/Ubuntu machine where `~/.local/bin/mise` is not 
 - Pressing `b` (or applying any plan that uses `mise`) shows the verified bootstrap step (`https://mise.jdx.dev` release tarball + SHA-256 check → `~/.local/bin/mise`).
 - When `mise` is installed but not active in the user's shell (no `mise activate` hook and no `~/.local/share/mise/shims` on `PATH`), a persistent amber header line warns that mise-managed tools will not resolve in the terminal. Pressing `B` offers (after `y` confirmation) to append a marked `eval "$(mise activate bash|zsh)"` block to the shell rc file; `outfitter doctor --fix [--shims]` does the same from the CLI. Fish and other shells get the manual line only.
 
+### 4.7 Shadowed Binaries Modal (`S`)
+
+Pressing `S` while the status bar shows `⚠ N shadowed` opens the **Shadowed Binaries** selection modal instead of deleting anything. Each entry names the tool, the unmanaged binary path on `PATH`, its version, the managed version it hides, and the exact removal command. All entries start checked; `↑`/`↓` (or `j`/`k`) moves, `Space` toggles one binary, `a` toggles all/none, `Enter` removes only the checked copies, and `Esc` cancels. `Enter` with nothing checked is a no-op. Selected system paths still detour through the sudo pre-flight; unchecked shadows remain installed and reported.
+
 ---
 
 ## 5. Keyboard Reference
@@ -184,7 +188,7 @@ When launched on a fresh Debian/Ubuntu machine where `~/.local/bin/mise` is not 
 | `/` | Global | Incremental search by tool name, binary, backend, or description (`Esc` clears) |
 | `r` | Global | Refresh installed states and upstream version checks |
 | `B` | Global | Fix mise shell integration (confirmed; appends the marked `mise activate` block to the shell rc) |
-| `S` | Global | Remove all shadowed binaries (confirmed; status bar shows `⚠ N shadowed` while any exist; sudo pre-flight for system paths) |
+| `S` | Global | Open the **Shadowed Binaries** selection modal: review each path/version, toggle entries with `Space`, then remove only the checked copies (status bar shows `⚠ N shadowed` while any exist; sudo pre-flight for selected system paths) |
 | `O` | Global | Open the **Update Outfitter?** modal when a newer Outfitter release is available (manual/development installs get an explanatory notice) |
 | `c` | Global | View the effective catalog source (built-in, demo, or extend/replace user catalog with name, path, and counts) |
 | `Enter` | Compact / Plan | Open tool detail card (in `80×24` mode) or confirm Apply (in Plan modal) |

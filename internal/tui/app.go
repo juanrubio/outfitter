@@ -178,7 +178,8 @@ type Model struct {
 	confirmShellFix    bool
 	shellWarning       string
 	onFixShell         func() (string, error)
-	confirmShadowSweep bool
+	shadowCursor       int
+	shadowSelected     map[string]bool
 	removeStrays       bool
 	pendingShadowSweep bool
 	onRemoveShadows    func(paths []string) (removed []string, err error)
@@ -516,18 +517,11 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if m.confirmShadowSweep {
-		m.confirmShadowSweep = false
-		if keystroke == "y" {
-			return m.beginShadowSweep()
-		}
-		m.notice = "Shadow sweep cancelled"
-		return m, nil
-	}
-
 	switch m.view {
 	case "quit":
 		return m.updateQuitKey(keystroke)
+	case "shadows":
+		return m.updateShadowsKey(key)
 	case "selfupdate":
 		return m.updateSelfUpdateKey(keystroke)
 	case "profiles":
@@ -612,17 +606,7 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.notice = "Add mise activation to your shell rc file? Press y to confirm, any other key to cancel."
 		}
 	case "S":
-		paths := m.shadowedPaths()
-		if len(paths) == 0 {
-			m.notice = "No shadowed binaries"
-		} else {
-			m.confirmShadowSweep = true
-			noun := "binaries"
-			if len(paths) == 1 {
-				noun = "binary"
-			}
-			m.notice = fmt.Sprintf("Remove %d shadowed %s? sudo may prompt. Press y to confirm, any other key to cancel.", len(paths), noun)
-		}
+		m.openShadows()
 	case "O":
 		return m.openSelfUpdate()
 	case "t":
@@ -1142,6 +1126,129 @@ func (m *Model) cycleFilter() {
 	m.ensureSelection()
 }
 
+type shadowEntry struct {
+	tool  domain.Tool
+	state domain.ToolState
+}
+
+// shadowEntries returns shadowed tools in catalog order for display and
+// selective removal.
+func (m *Model) shadowEntries() []shadowEntry {
+	entries := make([]shadowEntry, 0)
+	for _, tool := range m.catalog.Tools {
+		if state := m.states[tool.ID]; state.ShadowedBy != "" {
+			entries = append(entries, shadowEntry{tool: tool, state: state})
+		}
+	}
+	return entries
+}
+
+func (m *Model) openShadows() {
+	entries := m.shadowEntries()
+	if len(entries) == 0 {
+		m.notice = "No shadowed binaries"
+		return
+	}
+	m.shadowSelected = make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		m.shadowSelected[entry.tool.ID] = true
+	}
+	m.shadowCursor = 0
+	m.view = "shadows"
+	m.notice = ""
+}
+
+func (m *Model) shadowSelectedFor(id string) bool {
+	if m.shadowSelected == nil {
+		return true
+	}
+	return m.shadowSelected[id]
+}
+
+func (m *Model) selectedShadowEntries() []shadowEntry {
+	selected := make([]shadowEntry, 0)
+	for _, entry := range m.shadowEntries() {
+		if m.shadowSelectedFor(entry.tool.ID) {
+			selected = append(selected, entry)
+		}
+	}
+	return selected
+}
+
+func (m *Model) selectedShadowPaths() []string {
+	seen := make(map[string]bool)
+	paths := make([]string, 0)
+	for _, entry := range m.selectedShadowEntries() {
+		if !seen[entry.state.ShadowedBy] {
+			seen[entry.state.ShadowedBy] = true
+			paths = append(paths, entry.state.ShadowedBy)
+		}
+	}
+	return paths
+}
+
+// updateShadowsKey drives the Shadowed Binaries selection modal.
+func (m *Model) updateShadowsKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	entries := m.shadowEntries()
+	if len(entries) == 0 {
+		m.view = "catalog"
+		m.notice = "No shadowed binaries"
+		return m, nil
+	}
+	if m.shadowCursor < 0 {
+		m.shadowCursor = 0
+	}
+	if m.shadowCursor >= len(entries) {
+		m.shadowCursor = len(entries) - 1
+	}
+	switch key.String() {
+	case "esc", "q", "n":
+		m.view = "catalog"
+		m.notice = "Shadow sweep cancelled"
+	case "j", "down":
+		m.shadowCursor = (m.shadowCursor + 1) % len(entries)
+	case "k", "up":
+		m.shadowCursor = (m.shadowCursor - 1 + len(entries)) % len(entries)
+	case "pgdown":
+		m.shadowCursor = minInt(m.shadowCursor+5, len(entries)-1)
+	case "pgup":
+		m.shadowCursor = maxInt(m.shadowCursor-5, 0)
+	case "a":
+		selectAll := false
+		for _, entry := range entries {
+			if !m.shadowSelectedFor(entry.tool.ID) {
+				selectAll = true
+				break
+			}
+		}
+		if m.shadowSelected == nil {
+			m.shadowSelected = make(map[string]bool, len(entries))
+		}
+		for _, entry := range entries {
+			m.shadowSelected[entry.tool.ID] = selectAll
+		}
+	case "enter", "y":
+		if len(m.selectedShadowEntries()) == 0 {
+			m.notice = "Select at least one shadowed binary to remove"
+			return m, nil
+		}
+		m.view = "catalog"
+		return m.beginShadowSweep()
+	default:
+		if key.String() == " " || key.String() == "space" || key.Key().Code == tea.KeySpace {
+			id := entries[m.shadowCursor].tool.ID
+			if m.shadowSelected == nil {
+				m.shadowSelected = make(map[string]bool, len(entries))
+				for _, entry := range entries {
+					m.shadowSelected[entry.tool.ID] = true
+				}
+			}
+			m.shadowSelected[id] = !m.shadowSelected[id]
+		}
+	}
+	return m, nil
+}
+
 // shadowedPaths returns the shadow binary paths in catalog order.
 func (m *Model) shadowedPaths() []string {
 	var paths []string
@@ -1153,10 +1260,10 @@ func (m *Model) shadowedPaths() []string {
 	return paths
 }
 
-// beginShadowSweep runs the confirmed sweep, detouring through the sudo
-// pre-flight when any shadow lives in a system directory.
+// beginShadowSweep runs the confirmed selective sweep, detouring through
+// the sudo pre-flight when any selected shadow lives in a system directory.
 func (m *Model) beginShadowSweep() (tea.Model, tea.Cmd) {
-	for _, path := range m.shadowedPaths() {
+	for _, path := range m.selectedShadowPaths() {
 		if domain.RemovalNeedsSudo(path) {
 			m.pendingShadowSweep = true
 			m.notice = "Verifying sudo credentials before removing shadowed binaries…"
@@ -1182,12 +1289,13 @@ func (m *Model) handleShadowSudoVerified(msg shadowSudoVerifiedMsg) (tea.Model, 
 	return m, nil
 }
 
-// runShadowSweep deletes every shadowed binary via the configured
-// remover and clears the shadow markers for the paths that are gone.
+// runShadowSweep deletes the selected shadowed binaries via the
+// configured remover and clears markers only for paths that are gone;
+// unchecked shadows remain reported.
 func (m *Model) runShadowSweep() {
-	paths := m.shadowedPaths()
+	paths := m.selectedShadowPaths()
 	if len(paths) == 0 {
-		m.notice = "No shadowed binaries"
+		m.notice = "Select at least one shadowed binary to remove"
 		return
 	}
 	if m.onRemoveShadows == nil {
@@ -1844,6 +1952,8 @@ func (m *Model) render() string {
 		lines = m.renderQuit()
 	case "selfupdate":
 		lines = m.renderSelfUpdate()
+	case "shadows":
+		lines = m.renderShadows()
 	case "profiles":
 		lines = m.renderProfiles()
 	case "plan":

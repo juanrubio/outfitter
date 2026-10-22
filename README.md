@@ -42,6 +42,7 @@ Inside the TUI, everything is keyboard-driven and the footer always shows the ke
 | `a` | Toggle all visible tools in the current view |
 | `/` | Filter tools by name, binary, package, or description |
 | `Enter` | Open the **Dry-Run Plan Review** modal to inspect exact `$ <cmd>` steps and confirm execution |
+| `S` | Review shadowed binaries and choose which unmanaged copies to remove |
 | `t` | Cycle color themes (`Midnight`, `Daylight`, `Dracula`, `Nord`, `Monochrome`) |
 | `O` | Update Outfitter itself when a newer release is available |
 | `r` | Refresh installed and upstream versions |
@@ -173,6 +174,7 @@ The update method follows how the running binary was installed: mise-managed cop
 
 - **No disappearing NPM harnesses.** Node-based coding agents (`codex`, `pi`, `gemini-cli`, `copilot-cli`, `openclaw`, `mcporter`, `oracle`, `summarize`) run on a `mise`-managed Node LTS runtime with stable shims, so switching project Node versions in `nvm` never breaks your global AI CLIs.
 - **Per-tool failure isolation and structured logs.** If one upstream installer fails during a bulk update, Outfitter records its exit code and continues updating the remaining independent tools. Every run writes a full timestamped log to `~/.local/state/outfitter/logs/run-<timestamp>.log`.
+- **Shadowed binaries are opt-in by item.** When an unmanaged binary on `PATH` hides a managed one, the status bar counts it; pressing `S` lists every path and version first, and only the copies you leave checked are removed.
 - **Companion bundle support.** Native vendor installers handle special layouts automatically — including extracting `codexbar`'s `CodexBarCLI` executable alongside its required `CodexBarCLI_CodexBarCore.bundle` into `~/.local/share/outfitter/codexbar/` and symlinking `~/.local/bin/codexbar`.
 
 ## Contributing — humans and AI tools welcome

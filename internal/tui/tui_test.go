@@ -662,19 +662,20 @@ func TestShadowSweepHeaderAndKey(t *testing.T) {
 		t.Fatalf("status bar missing shadowed count:\n%s", m.View().Content)
 	}
 
-	// Cancel keeps everything.
+	// Cancel from the selective list keeps everything.
 	pressKey(m, 'S', "S")
-	if !m.confirmShadowSweep {
-		t.Fatal("S should ask for confirmation")
+	if m.view != "shadows" {
+		t.Fatalf("S should open the shadow list, view = %q", m.view)
 	}
-	pressKey(m, 'n', "n")
+	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if len(swept) != 0 {
 		t.Fatal("cancelled sweep must not run")
 	}
 
-	// Confirm sweeps (home paths need no sudo) and clears the count.
+	// Enter with the default all-checked selection sweeps (home paths
+	// need no sudo) and clears the count.
 	pressKey(m, 'S', "S")
-	pressKey(m, 'y', "y")
+	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if len(swept) != 2 {
 		t.Fatalf("swept = %v, want 2 paths", swept)
 	}
@@ -697,7 +698,7 @@ func TestShadowSweepHeaderAndKey(t *testing.T) {
 	m.states["tig"] = state
 	swept = nil
 	pressKey(m, 'S', "S")
-	cmd := pressKey(m, 'y', "y")
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("sudo-needed sweep should return the pre-flight command")
 	}
