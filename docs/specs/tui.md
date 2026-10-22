@@ -131,6 +131,8 @@ The selector lists whatever profiles the effective catalog defines — built-in,
 
 The header also identifies the catalog in effect. On wide terminals a compact label follows `OUTFITTER` for user catalogs and the demo (`[extend · <name>]`, `[replace · <name>]`, `[demo]`; the built-in catalog carries no label). Pressing `c` shows the full catalog source: demo snapshot, built-in, or the extend/replace user file with its name, path, and tool/category/profile counts.
 
+Outfitter's own release state is reported independently of the catalog. When a cached or refreshed check finds a newer release, a persistent amber header line reads `⬆ Outfitter <latest> available (you have <current>) · [O] update Outfitter`; it does not change the catalog tool/outdated counts.
+
 ### 4.3 Plan & Apply Dry-Run Screen (`a`)
 
 Pressing `a` opens the **Plan & Apply** confirmation screen before any command runs:
@@ -151,7 +153,11 @@ While applying the plan:
 - Displays a live tail of the active tool's stdout/stderr at the bottom of the screen so you are never staring at an opaque spinner.
 - If a tool fails, Outfitter records the error, continues with independent tools, and stays open on the summary screen so you can inspect the failure log (`l`) or retry failed items (`r`).
 
-### 4.5 First-Launch / Missing `mise` Banner
+### 4.5 Outfitter Self-Update Modal (`O`)
+
+Pressing `O` while an update is available opens the **Update Outfitter?** confirmation modal. It follows the Quit modal pattern: **Cancel** is selected by default, arrows/`Tab` switch between Cancel and Update, `Enter` confirms the selected button, `y` updates immediately, and `Esc`/`n` cancels. The modal shows `<current> → <latest>`, the provenance-specific update method, and warns that restarting discards the session (including any unapplied plan). For development builds and read-only/manual installs, `O` shows an explanatory notice instead of starting an update. A confirmed update runs asynchronously, then reports success or failure in the notice line; success clears the persistent warning and tells the user to restart Outfitter.
+
+### 4.6 First-Launch / Missing `mise` Banner
 
 When launched on a fresh Debian/Ubuntu machine where `~/.local/bin/mise` is not yet installed:
 - The top status bar shows `mise: not installed (will auto-bootstrap)` in amber.
@@ -179,6 +185,7 @@ When launched on a fresh Debian/Ubuntu machine where `~/.local/bin/mise` is not 
 | `r` | Global | Refresh installed states and upstream version checks |
 | `B` | Global | Fix mise shell integration (confirmed; appends the marked `mise activate` block to the shell rc) |
 | `S` | Global | Remove all shadowed binaries (confirmed; status bar shows `⚠ N shadowed` while any exist; sudo pre-flight for system paths) |
+| `O` | Global | Open the **Update Outfitter?** modal when a newer Outfitter release is available (manual/development installs get an explanatory notice) |
 | `c` | Global | View the effective catalog source (built-in, demo, or extend/replace user catalog with name, path, and counts) |
 | `Enter` | Compact / Plan | Open tool detail card (in `80×24` mode) or confirm Apply (in Plan modal) |
 | `s` | Plan modal | Toggle removing stray binaries after applying (opt-in per plan; succeeded steps only) |

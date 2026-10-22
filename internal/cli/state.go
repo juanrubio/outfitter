@@ -115,6 +115,28 @@ func (opts *options) mergeCachedUpstream(states map[string]domain.ToolState) map
 	return merged
 }
 
+func (opts *options) cachedSelfState(cat *catalog.Catalog) engine.SelfState {
+	if opts.demo {
+		return engine.SelfState{CurrentVersion: Version, InstallKind: engine.SelfInstallDevelopment}
+	}
+	if opts.deps.CachedSelf != nil {
+		return opts.deps.CachedSelf(cat)
+	}
+	return engine.NewSelfUpdater(Version, opts.deps.HomeDir).CachedState(cat)
+}
+
+func (opts *options) checkedSelfState(ctx context.Context, cat *catalog.Catalog) engine.SelfState {
+	if opts.demo {
+		return engine.SelfState{CurrentVersion: Version, InstallKind: engine.SelfInstallDevelopment}
+	}
+	if opts.deps.SelfCheck != nil {
+		state, _ := opts.deps.SelfCheck(ctx, cat, true)
+		return state
+	}
+	state, _ := engine.NewSelfUpdater(Version, opts.deps.HomeDir).Check(ctx, cat, true)
+	return state
+}
+
 func (opts *options) saveCache(states map[string]domain.ToolState) error {
 	if opts.demo {
 		return nil

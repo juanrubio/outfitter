@@ -52,6 +52,63 @@ func (m *Model) quitBox(width int) []string {
 	return lines
 }
 
+// renderSelfUpdate is the Update Outfitter? confirmation modal. It
+// follows the quit modal: Cancel is the safe default choice.
+func (m *Model) renderSelfUpdate() []string {
+	lines := m.headerLines("Update Outfitter")
+	bodyHeight := m.height - len(lines) - 2
+	if bodyHeight < 1 {
+		bodyHeight = 1
+	}
+	boxWidth := minInt(m.width-4, 64)
+	if boxWidth < 10 {
+		boxWidth = maxInt(m.width, 10)
+	}
+	lines = append(lines, m.centerBlock(m.selfUpdateBox(boxWidth), boxWidth, bodyHeight)...)
+	lines = append(lines, m.footerLines("←→/Tab Choose   Enter Confirm   Esc Cancel", "")...)
+	return lines
+}
+
+func (m *Model) selfUpdateBox(width int) []string {
+	state := m.selfState
+	content := [][]span{
+		{{text: "Update Outfitter?", token: "text", bold: true}},
+		nil,
+		{{text: fmt.Sprintf("%s → %s", state.CurrentVersion, state.LatestVersion), token: "accent", bold: true}},
+	}
+	if state.UpdateCommand != "" {
+		content = append(content,
+			nil,
+			[]span{{text: "Method: " + state.UpdateCommand, token: "muted"}},
+		)
+	}
+	content = append(content,
+		nil,
+		[]span{{text: "Restart Outfitter after updating to run the new version.", token: "low"}},
+	)
+	if !m.plan.IsEmpty() {
+		content = append(content,
+			[]span{{text: "Restarting discards this session's unapplied plan.", token: "low"}},
+		)
+	}
+	content = append(content, nil)
+	cancel := span{text: "[  Cancel  ]", token: "muted"}
+	update := span{text: "[  Update  ]", token: "muted"}
+	if m.selfChoice {
+		update = span{text: "[> Update  ]", token: "accent", bold: true}
+	} else {
+		cancel = span{text: "[> Cancel  ]", token: "accent", bold: true}
+	}
+	content = append(content, []span{cancel, {text: "   ", token: "muted"}, update})
+
+	lines := []string{m.boxTop("UPDATE OUTFITTER?", width, "accent")}
+	for _, spans := range content {
+		lines = append(lines, m.boxContentLine(spans, width))
+	}
+	lines = append(lines, m.boxBottom(width))
+	return lines
+}
+
 func (m *Model) renderProfiles() []string {
 	lines := m.headerLines("Profiles · Select an outfit profile")
 	bodyHeight := m.height - len(lines) - 2
@@ -532,7 +589,7 @@ func (m *Model) helpBox(width, height int) []string {
 		{"x", "Reset/clear all pending actions in the current plan"},
 		{"f", "Cycle filter: All → Outdated → Pending → Installed → Not Installed"},
 		{"/", "Incremental search by tool name, binary, backend, package, or description"},
-		{"b / B / S", "Bootstrap demo / fix shell / remove shadowed"},
+		{"b / B / S / O", "Bootstrap demo / fix shell / remove shadowed / update Outfitter"},
 		{"r", "Refresh installed binary checks and upstream version readings"},
 		{"Esc / q", "Close active overlay or return to the catalog desk"},
 	}

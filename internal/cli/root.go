@@ -90,6 +90,7 @@ func NewRootCmdWithDeps(deps Deps) *cobra.Command {
 				CatalogPath:       opts.catalog,
 				HomeDir:           opts.deps.HomeDir,
 				IgnoreUserCatalog: opts.ignoreUserCatalog,
+				AppVersion:        Version,
 			})
 		},
 	}
@@ -110,6 +111,7 @@ func NewRootCmdWithDeps(deps Deps) *cobra.Command {
 		newUpdateCmd(opts),
 		newRemoveCmd(opts),
 		newCatalogCmd(opts),
+		newSelfUpdateCmd(opts),
 		newInternalBootstrapCmd(opts),
 	)
 	return cmd

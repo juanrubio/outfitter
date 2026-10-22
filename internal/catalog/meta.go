@@ -127,7 +127,7 @@ func parseHeader(rawDoc map[string]any) (catalogHeader, error) {
 var (
 	topLevelKeys = keySet("catalog", "settings", "categories", "tools", "profiles")
 	catalogKeys  = keySet("schema_version", "mode", "name")
-	settingsKeys = keySet("install_dir", "auto_bootstrap_mise", "github_token_from_gh")
+	settingsKeys = keySet("install_dir", "auto_bootstrap_mise", "github_token_from_gh", "self_update_check")
 	categoryKeys = keySet("id", "num", "title")
 	toolKeys     = keySet("id", "name", "binary", "category", "backend", "package", "sudo",
 		"profiles", "description", "install_cmd", "update_cmd", "remove_cmd", "source_dir",

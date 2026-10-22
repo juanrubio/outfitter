@@ -94,6 +94,7 @@ type Settings struct {
 	InstallDir        string `json:"install_dir" toml:"install_dir"`
 	AutoBootstrapMise bool   `json:"auto_bootstrap_mise" toml:"auto_bootstrap_mise"`
 	GitHubTokenFromGH bool   `json:"github_token_from_gh" toml:"github_token_from_gh"`
+	SelfUpdateCheck   bool   `json:"self_update_check" toml:"self_update_check"`
 }
 
 // DefaultSettings returns Outfitter's built-in settings defaults.
@@ -102,6 +103,7 @@ func DefaultSettings() Settings {
 		InstallDir:        DefaultInstallDir,
 		AutoBootstrapMise: true,
 		GitHubTokenFromGH: true,
+		SelfUpdateCheck:   true,
 	}
 }
 

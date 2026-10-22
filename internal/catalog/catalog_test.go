@@ -457,11 +457,15 @@ auto_bootstrap_mise = false
 	if !cat.Settings.GitHubTokenFromGH {
 		t.Fatal("github_token_from_gh should retain its default")
 	}
+	if !cat.Settings.SelfUpdateCheck {
+		t.Fatal("self_update_check should retain its default")
+	}
 
 	cat, err = catalog.LoadFromBytes([]byte(`
 [settings]
 install_dir = "~/bin"
 github_token_from_gh = false
+self_update_check = false
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -474,6 +478,9 @@ github_token_from_gh = false
 	}
 	if cat.Settings.GitHubTokenFromGH {
 		t.Fatal("github_token_from_gh should be false")
+	}
+	if cat.Settings.SelfUpdateCheck {
+		t.Fatal("self_update_check should be false")
 	}
 }
 

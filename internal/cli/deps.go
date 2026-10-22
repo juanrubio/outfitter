@@ -34,6 +34,11 @@ type Deps struct {
 	RunTUI        func(ctx context.Context, opts tui.Options) error
 	MiseInstalled func() (string, bool)
 	ShellSetup    func() *engine.ShellSetup
+	SelfCheck     func(ctx context.Context, cat *catalog.Catalog, force bool) (engine.SelfState, error)
+	// SelfCheckExplicit serves `outfitter self-update --check`; nil falls back to SelfCheck.
+	SelfCheckExplicit func(ctx context.Context, cat *catalog.Catalog) (engine.SelfState, error)
+	CachedSelf        func(cat *catalog.Catalog) engine.SelfState
+	SelfUpdate        func(ctx context.Context, cat *catalog.Catalog, opts engine.SelfUpdateOptions) (engine.SelfUpdateResult, error)
 }
 
 // DefaultDeps returns production implementations for every CLI dependency.
@@ -94,6 +99,31 @@ func (d Deps) withDefaults() Deps {
 	}
 	if d.ShellSetup == nil {
 		d.ShellSetup = defaults.ShellSetup
+	}
+	homeDir := d.HomeDir
+	newUpdater := func() *engine.SelfUpdater {
+		return engine.NewSelfUpdater(Version, homeDir)
+	}
+	customSelfCheck := d.SelfCheck != nil
+	if d.SelfCheck == nil {
+		d.SelfCheck = func(ctx context.Context, cat *catalog.Catalog, force bool) (engine.SelfState, error) {
+			return newUpdater().Check(ctx, cat, force)
+		}
+	}
+	if d.SelfCheckExplicit == nil && !customSelfCheck {
+		d.SelfCheckExplicit = func(ctx context.Context, cat *catalog.Catalog) (engine.SelfState, error) {
+			return newUpdater().CheckExplicit(ctx, cat)
+		}
+	}
+	if d.CachedSelf == nil {
+		d.CachedSelf = func(cat *catalog.Catalog) engine.SelfState {
+			return newUpdater().CachedState(cat)
+		}
+	}
+	if d.SelfUpdate == nil {
+		d.SelfUpdate = func(ctx context.Context, cat *catalog.Catalog, opts engine.SelfUpdateOptions) (engine.SelfUpdateResult, error) {
+			return newUpdater().Update(ctx, cat, opts)
+		}
 	}
 	return d
 }

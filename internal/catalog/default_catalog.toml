@@ -5,6 +5,7 @@
 install_dir = "~/.local/bin"
 auto_bootstrap_mise = true
 github_token_from_gh = true
+self_update_check = true
 
 [[categories]]
 id = "harnesses"

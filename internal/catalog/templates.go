@@ -38,6 +38,7 @@ mode = "replace"
 install_dir = "~/.local/bin"
 auto_bootstrap_mise = true
 github_token_from_gh = true
+self_update_check = true
 
 # Categories are optional: a tool's category is created automatically
 # when it is not declared here.
@@ -92,6 +93,7 @@ mode = "extend"
 # Override settings field by field (unspecified fields keep defaults).
 # [settings]
 # install_dir = "~/.local/bin"
+# self_update_check = false   # stop Outfitter update notices
 
 # Override a built-in tool: only the fields you set change.
 # [[tools]]

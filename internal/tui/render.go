@@ -242,6 +242,11 @@ func (m *Model) headerLines(barTitle string) []string {
 			[]span{{text: truncateDisplay(m.shellWarning, m.width), token: "low", bold: true}},
 			nil, m.width))
 	}
+	if warning := m.selfUpdateWarning(); warning != "" {
+		lines = append(lines, m.composeLine(
+			[]span{{text: truncateDisplay(warning, m.width), token: "low", bold: true}},
+			nil, m.width))
+	}
 	if m.refreshing {
 		lines = append(lines, m.refreshLine())
 	}

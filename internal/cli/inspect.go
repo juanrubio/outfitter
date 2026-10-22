@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/juanrubio/outfitter/internal/engine"
 )
 
 func newStatusCmd(opts *options) *cobra.Command {
@@ -22,11 +24,15 @@ func newStatusCmd(opts *options) *cobra.Command {
 				return err
 			}
 			states = opts.mergeCachedUpstream(states)
+			self := opts.cachedSelfState(cat)
 			entries := statusEntries(cat, states)
 			if jsonOut {
 				return writeJSON(cmd.OutOrStdout(), entries)
 			}
 			if err := writeStatusTable(cmd.OutOrStdout(), cat.Tools, states); err != nil {
+				return err
+			}
+			if err := writeSelfUpdateLine(cmd.OutOrStdout(), self); err != nil {
 				return err
 			}
 			return opts.writeShellWarning(cmd.OutOrStdout(), states)
@@ -52,6 +58,7 @@ func newCheckCmd(opts *options) *cobra.Command {
 				return err
 			}
 			states = opts.upstreamStates(cmd.Context(), cat, states)
+			self := opts.checkedSelfState(cmd.Context(), cat)
 			if err := opts.saveCache(states); err != nil {
 				return err
 			}
@@ -71,19 +78,26 @@ func newCheckCmd(opts *options) *cobra.Command {
 				}
 			}
 			payload := struct {
-				Tools         []statusEntry `json:"tools"`
-				OutdatedCount int           `json:"outdated_count"`
-				Updates       []string      `json:"updates"`
+				Tools         []statusEntry    `json:"tools"`
+				OutdatedCount int              `json:"outdated_count"`
+				Updates       []string         `json:"updates"`
+				Self          engine.SelfState `json:"self"`
 			}{
 				Tools:         entries,
 				OutdatedCount: len(updates),
 				Updates:       updates,
+				Self:          self,
 			}
 			if jsonOut {
 				return writeJSON(cmd.OutOrStdout(), payload)
 			}
 
 			out := cmd.OutOrStdout()
+			if line := selfUpdateLine(self); line != "" {
+				if _, err := fmt.Fprintln(out, line); err != nil {
+					return err
+				}
+			}
 			if len(updates) == 0 {
 				if _, err := fmt.Fprintf(out, "All %d installed tools are up to date.\n", upToDate); err != nil {
 					return err

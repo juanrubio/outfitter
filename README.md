@@ -19,6 +19,8 @@ If `mise` is not yet installed on a fresh Debian or Ubuntu machine, Outfitter au
 
 Prefer building from source? With Go installed: `go build -o outfitter ./cmd/outfitter` (or `make build`).
 
+Outfitter also watches its own releases. When a newer version is available, the TUI shows an update line and `outfitter check` reports it separately from catalog tools. Press `O` in the TUI or run `outfitter self-update` to confirm and install it; mise-managed copies update through `mise`, while standalone binaries are downloaded, SHA-256-verified, and atomically replaced. Restart Outfitter afterward to run the new version.
+
 ## Quick start
 
 ```sh
@@ -41,6 +43,7 @@ Inside the TUI, everything is keyboard-driven and the footer always shows the ke
 | `/` | Filter tools by name, binary, package, or description |
 | `Enter` | Open the **Dry-Run Plan Review** modal to inspect exact `$ <cmd>` steps and confirm execution |
 | `t` | Cycle color themes (`Midnight`, `Daylight`, `Dracula`, `Nord`, `Monochrome`) |
+| `O` | Update Outfitter itself when a newer release is available |
 | `r` | Refresh installed and upstream versions |
 | `?` | Open the keyboard shortcut reference |
 | `q` | Quit Outfitter |
@@ -59,6 +62,7 @@ outfitter profile apply server --yes       # bootstrap a headless VPS profile no
 outfitter install claude-code codex --yes  # install specific tools
 outfitter update --all --yes               # bulk-update every outdated tool
 outfitter remove aider --yes               # uninstall specific tools
+outfitter self-update                      # update Outfitter itself (or use --check / --dry-run first)
 outfitter catalog show                     # which catalog is in effect (built-in, extend, or replace)
 outfitter catalog validate                 # check your catalog.toml without touching any tools
 ```
@@ -152,6 +156,18 @@ If the user catalog cannot be parsed or fails validation, Outfitter reports an e
 ```sh
 outfitter --ignore-user-catalog status
 ```
+
+## Updating Outfitter itself
+
+Outfitter is deliberately **not** one of its own catalog tools, so replacement catalogs cannot hide its update state. During upstream refreshes it checks GitHub's latest Outfitter release at most once a day and caches the result in `~/.cache/outfitter/self-check.json`. `outfitter status` shows the cached notice and `outfitter check` performs a fresh check, reporting Outfitter separately from catalog tools (including a `self` object with `--json`).
+
+```sh
+outfitter self-update --check    # report only
+outfitter self-update --dry-run  # show what would happen
+outfitter self-update            # confirm, update, then restart Outfitter
+```
+
+The update method follows how the running binary was installed: mise-managed copies update through `mise`; writable standalone binaries are replaced only after checksum and `--version` verification, with the previous binary kept beside the new one as `<binary>.previous`. Read-only/system installs and development builds report the release but are never modified automatically. To silence background notices, set `self_update_check = false` under `[settings]` in your catalog or set `OUTFITTER_NO_UPDATE_CHECK=1`; an explicit `outfitter self-update` still checks when you ask it to.
 
 ## Good to know
 

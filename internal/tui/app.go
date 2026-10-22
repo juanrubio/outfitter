@@ -84,7 +84,13 @@ type refreshProgressMsg struct {
 type refreshStreamClosedMsg struct{}
 
 type refreshDoneMsg struct {
-	states map[string]domain.ToolState
+	states    map[string]domain.ToolState
+	selfState *engine.SelfState
+	err       error
+}
+
+type selfUpdateDoneMsg struct {
+	result engine.SelfUpdateResult
 	err    error
 }
 
@@ -130,6 +136,16 @@ type Options struct {
 	// OnRemoveShadows deletes shadowed binaries and returns the paths
 	// that are gone. Live launches install a default.
 	OnRemoveShadows func(paths []string) (removed []string, err error)
+	// AppVersion is the running Outfitter build version used for
+	// self-update checks. Empty or "dev" disables live self-checks.
+	AppVersion string
+	// SelfState seeds the known self-update state (tests and cached state).
+	SelfState engine.SelfState
+	// OnSelfCheck refreshes self-update state during upstream refresh.
+	OnSelfCheck func(context.Context) (engine.SelfState, error)
+	// OnSelfUpdate installs the available Outfitter update after the
+	// user confirms. Live launches install a default.
+	OnSelfUpdate func(context.Context) (engine.SelfUpdateResult, error)
 }
 
 // Model is the Bubble Tea model for the catalog and inspector layouts.
@@ -166,6 +182,14 @@ type Model struct {
 	removeStrays       bool
 	pendingShadowSweep bool
 	onRemoveShadows    func(paths []string) (removed []string, err error)
+	appVersion         string
+	homeDir            string
+	selfState          engine.SelfState
+	selfChoice         bool
+	selfUpdating       bool
+	selfUpdated        bool
+	onSelfCheck        func(context.Context) (engine.SelfState, error)
+	onSelfUpdate       func(context.Context) (engine.SelfUpdateResult, error)
 	activeProfileID    string
 	profileCursor      int
 	execSteps          []executionStep
@@ -220,6 +244,11 @@ func NewModel(opts Options) (*Model, error) {
 		shellWarning:    opts.ShellWarning,
 		onFixShell:      opts.OnFixShell,
 		onRemoveShadows: opts.OnRemoveShadows,
+		appVersion:      opts.AppVersion,
+		homeDir:         opts.HomeDir,
+		selfState:       opts.SelfState,
+		onSelfCheck:     opts.OnSelfCheck,
+		onSelfUpdate:    opts.OnSelfUpdate,
 	}
 
 	if opts.Demo {
@@ -278,6 +307,24 @@ func NewModel(opts Options) (*Model, error) {
 	}
 	if m.actions == nil {
 		m.actions = make(map[string]domain.DesiredAction)
+	}
+	if !opts.Demo && m.autoRefresh && m.onRefresh == nil {
+		updater := engine.NewSelfUpdater(m.appVersion, m.homeDir)
+		if m.selfState.CurrentVersion == "" {
+			m.selfState = updater.CachedState(m.catalog)
+		}
+		if m.onSelfCheck == nil {
+			cat := m.catalog
+			m.onSelfCheck = func(ctx context.Context) (engine.SelfState, error) {
+				return updater.Check(ctx, cat, false)
+			}
+		}
+		if m.onSelfUpdate == nil {
+			cat := m.catalog
+			m.onSelfUpdate = func(ctx context.Context) (engine.SelfUpdateResult, error) {
+				return updater.Update(ctx, cat, engine.SelfUpdateOptions{})
+			}
+		}
 	}
 	if !opts.Demo && m.autoRefresh && m.onRefresh == nil && m.onRemoveShadows == nil {
 		m.onRemoveShadows = engine.RemoveShadowedBinaries
@@ -431,6 +478,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case refreshDoneMsg:
 		m.applyRefresh(msg)
 		return m, nil
+	case selfUpdateDoneMsg:
+		m.applySelfUpdate(msg)
+		return m, nil
 	case spinnerTickMsg:
 		if !m.refreshing {
 			return m, nil
@@ -478,6 +528,8 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.view {
 	case "quit":
 		return m.updateQuitKey(keystroke)
+	case "selfupdate":
+		return m.updateSelfUpdateKey(keystroke)
 	case "profiles":
 		return m.updateProfilesKey(key)
 	case "plan":
@@ -571,6 +623,8 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			m.notice = fmt.Sprintf("Remove %d shadowed %s? sudo may prompt. Press y to confirm, any other key to cancel.", len(paths), noun)
 		}
+	case "O":
+		return m.openSelfUpdate()
 	case "t":
 		m.cycleTheme()
 	case "r", "R":
@@ -649,6 +703,108 @@ func (m *Model) updateQuitKey(keystroke string) (tea.Model, tea.Cmd) {
 		m.view = "catalog"
 	}
 	return m, nil
+}
+
+// selfUpdateWarning is the persistent header line shown while a newer
+// Outfitter release is known and not yet installed by this session.
+func (m *Model) selfUpdateWarning() string {
+	if m.demo || m.selfUpdated || !m.selfState.Outdated {
+		return ""
+	}
+	if m.selfUpdating {
+		return fmt.Sprintf("⬆ Updating Outfitter to %s…", m.selfState.LatestVersion)
+	}
+	return fmt.Sprintf("⬆ Outfitter %s available (you have %s) · [O] update Outfitter",
+		m.selfState.LatestVersion, m.selfState.CurrentVersion)
+}
+
+func (m *Model) openSelfUpdate() (tea.Model, tea.Cmd) {
+	if m.selfUpdating {
+		m.notice = "Outfitter update already running…"
+		return m, nil
+	}
+	if m.selfUpdated {
+		m.notice = "Outfitter updated — restart Outfitter to run the new version"
+		return m, nil
+	}
+	if !m.selfState.Outdated {
+		if m.selfState.CurrentVersion != "" {
+			m.notice = "Outfitter " + m.selfState.CurrentVersion + " is up to date"
+		} else {
+			m.notice = "No Outfitter update available"
+		}
+		return m, nil
+	}
+	if !m.selfState.CanSelfUpdate {
+		hint := m.selfState.ManualHint
+		if hint == "" {
+			hint = "download the latest release manually"
+		}
+		m.notice = fmt.Sprintf("Outfitter %s is available; %s", m.selfState.LatestVersion, hint)
+		return m, nil
+	}
+	m.view = "selfupdate"
+	m.selfChoice = false
+	return m, nil
+}
+
+// updateSelfUpdateKey drives the Update Outfitter? modal, mirroring the
+// quit modal: Cancel is the safe default.
+func (m *Model) updateSelfUpdateKey(keystroke string) (tea.Model, tea.Cmd) {
+	switch keystroke {
+	case "esc", "n":
+		m.view = "catalog"
+		m.notice = "Outfitter update cancelled"
+	case "left", "right", "up", "down", "tab", "shift+tab":
+		m.selfChoice = !m.selfChoice
+	case "y":
+		return m.beginSelfUpdate()
+	case "enter":
+		if m.selfChoice {
+			return m.beginSelfUpdate()
+		}
+		m.view = "catalog"
+		m.notice = "Outfitter update cancelled"
+	}
+	return m, nil
+}
+
+func (m *Model) beginSelfUpdate() (tea.Model, tea.Cmd) {
+	m.view = "catalog"
+	if m.onSelfUpdate == nil {
+		m.notice = "Self-update is unavailable in this session; run: outfitter self-update"
+		return m, nil
+	}
+	m.selfUpdating = true
+	m.notice = "Updating Outfitter…"
+	ctx := m.baseCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	update := m.onSelfUpdate
+	return m, func() tea.Msg {
+		result, err := update(ctx)
+		return selfUpdateDoneMsg{result: result, err: err}
+	}
+}
+
+func (m *Model) applySelfUpdate(msg selfUpdateDoneMsg) {
+	m.selfUpdating = false
+	if msg.err != nil {
+		m.notice = "Outfitter update failed: " + msg.err.Error()
+		return
+	}
+	if msg.result.State.CurrentVersion != "" {
+		m.selfState = msg.result.State
+	}
+	if msg.result.Updated {
+		m.selfUpdated = true
+	}
+	if msg.result.Message != "" {
+		m.notice = msg.result.Message
+	} else {
+		m.notice = "Outfitter update completed"
+	}
 }
 
 func (m *Model) updateProfilesKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -1442,6 +1598,7 @@ func (m *Model) startRefresh() tea.Cmd {
 	events := make(chan refreshProgressMsg, total*2+8)
 	m.refreshEvents = events
 	cat := m.catalog
+	selfCheck := m.onSelfCheck
 	initialCached := cloneStates(m.states)
 
 	runCmd := func() tea.Msg {
@@ -1485,7 +1642,13 @@ func (m *Model) startRefresh() tea.Cmd {
 		if cachePath := engine.DefaultCachePath(""); cachePath != "" {
 			_ = engine.SaveCache(cachePath, engine.CacheSnapshot{States: finalStates})
 		}
-		return refreshDoneMsg{states: finalStates}
+		var selfState *engine.SelfState
+		if selfCheck != nil {
+			if state, err := selfCheck(ctx); err == nil {
+				selfState = &state
+			}
+		}
+		return refreshDoneMsg{states: finalStates, selfState: selfState}
 	}
 
 	return tea.Batch(runCmd, waitForRefreshEvent(events), spinnerTickCmd())
@@ -1534,6 +1697,9 @@ func (m *Model) applyRefresh(msg refreshDoneMsg) {
 	}
 	if msg.states != nil {
 		m.states = cloneStates(msg.states)
+	}
+	if msg.selfState != nil {
+		m.selfState = *msg.selfState
 	}
 	if _, found := engine.FindMise(nil, ""); found {
 		m.miseInstalled = true
@@ -1676,6 +1842,8 @@ func (m *Model) render() string {
 	switch m.view {
 	case "quit":
 		lines = m.renderQuit()
+	case "selfupdate":
+		lines = m.renderSelfUpdate()
 	case "profiles":
 		lines = m.renderProfiles()
 	case "plan":

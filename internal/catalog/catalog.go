@@ -310,6 +310,7 @@ type userSettings struct {
 	InstallDir        *string `json:"install_dir"`
 	AutoBootstrapMise *bool   `json:"auto_bootstrap_mise"`
 	GitHubTokenFromGH *bool   `json:"github_token_from_gh"`
+	SelfUpdateCheck   *bool   `json:"self_update_check"`
 }
 
 type userCategory struct {
@@ -394,6 +395,9 @@ func applyUserSettings(cat *Catalog, raw map[string]any) error {
 	}
 	if settings.GitHubTokenFromGH != nil {
 		cat.Settings.GitHubTokenFromGH = *settings.GitHubTokenFromGH
+	}
+	if settings.SelfUpdateCheck != nil {
+		cat.Settings.SelfUpdateCheck = *settings.SelfUpdateCheck
 	}
 	return nil
 }

@@ -197,6 +197,7 @@ Selection and recovery:
 install_dir = "~/.local/bin"
 auto_bootstrap_mise = true
 github_token_from_gh = true
+self_update_check = true
 
 # Override a built-in tool to build from local source while developing
 [[tools]]
@@ -230,6 +231,7 @@ tools = ["tmux", "gh", "claude-code", "codex", "openclaw", "boardwalk", "ripgrep
 ## 6. State & Cache Lifecycle
 
 - **Instant startup from snapshot:** Outfitter stores the last known tool state and upstream version cache at `~/.cache/outfitter/state.json`. Launching `outfitter` paints the screen immediately in `<50 ms` using cached version readings plus fast local `exec.LookPath` checks, then refreshes installed and upstream versions asynchronously in the background.
+- **Self-update check cache:** The latest known Outfitter release and check time live separately at `~/.cache/outfitter/self-check.json`. Background checks run at most once per 24 hours, are recomputed against the currently running binary version, and can be disabled with `[settings] self_update_check = false` or `OUTFITTER_NO_UPDATE_CHECK=1`. Development builds and demo mode never check.
 - **No silent mutations:** Selecting or deselecting checkboxes in the TUI mutates an in-memory **Pending Action Plan** (`+N install`, `↑N update`, `-N remove`). Nothing on disk is modified until the user presses `a` (`Apply`) and confirms on the Plan Review modal.
 - **Execution logs:** Every apply run records structured command output and exit codes in `~/.local/state/outfitter/logs/run-<timestamp>.log` so failed installations can be inspected or copied right from the TUI.
 
@@ -249,12 +251,23 @@ outfitter profile apply <name> [--dry-run] [--yes]  # Install all tools in a pro
 outfitter install <tool-id>... [--dry-run] [--yes] [--remove-strays]  # Install specific tools
 outfitter update [<tool-id>...] [--all] [--dry-run] [--yes] [--remove-strays]  # Bulk-update outdated tools
 outfitter remove <tool-id>... [--dry-run] [--yes]   # Uninstall specific tools
+outfitter self-update [--check|--dry-run] [--yes] [--json]  # Check for or install a newer Outfitter release
 outfitter catalog init [--blank|--extend] [--output <path>] [--force]  # Write a starter user catalog (seeded replacement by default)
 outfitter catalog show [--json]            # Show the effective catalog's mode, origin, path, and counts
 outfitter catalog validate [<path>] [--json]  # Validate a catalog (exit 1 when invalid, 2 on usage errors)
 outfitter catalog export > catalog.toml    # Print the raw built-in catalog
 outfitter --ignore-user-catalog status     # Bypass a broken user catalog and use the built-in catalog
 ```
+
+### Self-Update
+
+Outfitter is not a catalog tool. A dedicated self-state compares the running binary's build-time version with GitHub's latest non-prerelease `juanrubio/outfitter` release, so extend and replacement catalogs cannot hide or redefine it:
+
+- `status` displays the cached self-update notice without network I/O. Its `--json` output remains the catalog entries array for compatibility.
+- `check` forces a self-check alongside tool upstream checks and reports Outfitter separately; `--json` adds a `self` object while tool `updates` and `outdated_count` remain catalog-only.
+- `self-update --check` reports only; `--dry-run` shows the provenance-specific method; a confirmed update requires an interactive confirmation or `--yes` (JSON execution also requires `--yes`).
+- Mise-managed binaries update with `mise use --global ubi:juanrubio/outfitter[exe=outfitter]@<latest>` and are verified through `mise which`. Writable standalone Linux/macOS `amd64`/`arm64` binaries download the matching release asset and `SHA256SUMS`, verify the digest and downloaded `--version`, keep a `<binary>.previous` backup, atomically replace the resolved binary, verify it again, and roll back on verification failure.
+- Read-only/system locations, unsupported platforms, and development builds are report-only with a manual-download hint. A successful update always requires restarting Outfitter; the running process keeps the old version and catalog.
 
 ### Exit Codes
 - `0`: Success (all requested actions or checks succeeded).
