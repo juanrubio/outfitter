@@ -124,6 +124,507 @@ func TestLiveExecutionUsesInjectedRunner(t *testing.T) {
 	}
 }
 
+// TestExecutionReturnToCatalog covers leaving the execution view after a
+// run: succeeded tools leave the plan, failed tools stay queued for a
+// retry, and the catalog is re-inspected whenever anything succeeded so
+// the main screen shows post-update state.
+func TestExecutionReturnToCatalog(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name          string
+		outcomes      map[string]bool
+		wantActions   map[string]domain.DesiredAction
+		wantRefresh   bool
+		wantInstalled map[string]string
+	}{
+		{
+			name:        "success resets plan and refreshes",
+			outcomes:    map[string]bool{"claude-code": true, "codex": true},
+			wantActions: map[string]domain.DesiredAction{},
+			wantRefresh: true,
+			wantInstalled: map[string]string{
+				"claude-code": "2.0.0", "codex": "2.0.0",
+			},
+		},
+		{
+			name:        "partial failure keeps failed action and refreshes",
+			outcomes:    map[string]bool{"claude-code": true, "codex": false},
+			wantActions: map[string]domain.DesiredAction{"codex": domain.ActionUpdate},
+			wantRefresh: true,
+			wantInstalled: map[string]string{
+				"claude-code": "2.0.0", "codex": "1.0.0",
+			},
+		},
+		{
+			name:     "all failed keeps plan and skips refresh",
+			outcomes: map[string]bool{"claude-code": false, "codex": false},
+			wantActions: map[string]domain.DesiredAction{
+				"claude-code": domain.ActionUpdate, "codex": domain.ActionUpdate,
+			},
+			wantRefresh: false,
+			wantInstalled: map[string]string{
+				"claude-code": "1.0.0", "codex": "1.0.0",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			refreshed := false
+			executor := func(
+				_ context.Context, plan domain.ActionPlan, onEvent func(engine.StepEvent),
+			) engine.PlanResult {
+				steps := plan.Steps()
+				results := make([]engine.StepResult, 0, len(steps))
+				for index, step := range steps {
+					success := tc.outcomes[step.Tool.ID]
+					status := string(engine.StepStatusDone)
+					if !success {
+						status = string(engine.StepStatusFailed)
+					}
+					onEvent(engine.StepEvent{
+						StepIndex: index, TotalSteps: len(steps), Step: step,
+						Status: status, Duration: time.Millisecond,
+					})
+					results = append(results, engine.StepResult{Step: step, Success: success})
+				}
+				return engine.PlanResult{
+					StartedAt: time.Now(), FinishedAt: time.Now(), Steps: results,
+				}
+			}
+
+			m, err := NewModel(Options{
+				Catalog: cat,
+				Width:   120,
+				Height:  40,
+				States: map[string]domain.ToolState{
+					"claude-code": {InstalledVersion: "1.0.0", LatestVersion: "2.0.0"},
+					"codex":       {InstalledVersion: "1.0.0", LatestVersion: "2.0.0"},
+				},
+				Actions: map[string]domain.DesiredAction{
+					"claude-code": domain.ActionUpdate,
+					"codex":       domain.ActionUpdate,
+				},
+				MiseInstalled: true,
+				OnExecute:     executor,
+				OnRefresh: func(context.Context) (map[string]domain.ToolState, error) {
+					refreshed = true
+					return map[string]domain.ToolState{
+						"claude-code": {InstalledVersion: tc.wantInstalled["claude-code"], LatestVersion: "2.0.0"},
+						"codex":       {InstalledVersion: tc.wantInstalled["codex"], LatestVersion: "2.0.0"},
+					}, nil
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, cmd := m.beginExecution()
+			drainCommands(t, m, cmd)
+			if refreshed {
+				t.Fatal("refresh ran before returning to the catalog")
+			}
+
+			cmd = pressKey(m, tea.KeyEscape, "")
+			if m.view != "catalog" {
+				t.Fatalf("view = %q, want catalog", m.view)
+			}
+			drainCommands(t, m, cmd)
+
+			if refreshed != tc.wantRefresh {
+				t.Fatalf("refreshed = %v, want %v", refreshed, tc.wantRefresh)
+			}
+			if len(m.actions) != len(tc.wantActions) {
+				t.Fatalf("actions = %v, want %v", m.actions, tc.wantActions)
+			}
+			for id, want := range tc.wantActions {
+				if got := m.actions[id]; got != want {
+					t.Fatalf("actions[%q] = %q, want %q (all: %v)", id, got, want, m.actions)
+				}
+			}
+			if tc.wantRefresh {
+				for id, want := range tc.wantInstalled {
+					if got := m.states[id].InstalledVersion; got != want {
+						t.Fatalf("states[%q].InstalledVersion = %q, want %q", id, got, want)
+					}
+				}
+				if _, _, _, installs, updates, removals := m.counts(); installs+updates+removals != len(tc.wantActions) {
+					t.Fatalf("plan counts = +%d ↑%d -%d, want %d queued actions",
+						installs, updates, removals, len(tc.wantActions))
+				}
+			}
+		})
+	}
+}
+
+// TestExecutionReturnWhileRunningKeepsPlan verifies Esc during a live run
+// only leaves the view: the plan stays queued, no refresh starts, and the
+// background run keeps its state. The second run also proves a previous
+// run's result does not leak into the next execution.
+func TestExecutionReturnWhileRunningKeepsPlan(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshes := 0
+	m, err := NewModel(Options{
+		Catalog: cat,
+		Width:   120,
+		Height:  40,
+		States: map[string]domain.ToolState{
+			"claude-code": {InstalledVersion: "1.0.0", LatestVersion: "2.0.0"},
+		},
+		Actions:       map[string]domain.DesiredAction{"claude-code": domain.ActionUpdate},
+		MiseInstalled: true,
+		OnExecute: func(
+			_ context.Context, plan domain.ActionPlan, _ func(engine.StepEvent),
+		) engine.PlanResult {
+			steps := plan.Steps()
+			results := make([]engine.StepResult, 0, len(steps))
+			for _, step := range steps {
+				results = append(results, engine.StepResult{Step: step, Success: true})
+			}
+			return engine.PlanResult{StartedAt: time.Now(), FinishedAt: time.Now(), Steps: results}
+		},
+		OnRefresh: func(context.Context) (map[string]domain.ToolState, error) {
+			refreshes++
+			return map[string]domain.ToolState{
+				"claude-code": {InstalledVersion: "2.0.0", LatestVersion: "2.0.0"},
+			}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// First run completes and the user returns to the catalog.
+	_, cmd := m.beginExecution()
+	drainCommands(t, m, cmd)
+	cmd = pressKey(m, tea.KeyEscape, "")
+	drainCommands(t, m, cmd)
+	if refreshes != 1 {
+		t.Fatalf("refreshes after first return = %d, want 1", refreshes)
+	}
+
+	// Queue a new action for the same tool and start a second run.
+	m.actions["claude-code"] = domain.ActionRemove
+	m.rebuildPlan()
+	_, cmd = m.beginExecution()
+	if cmd == nil {
+		t.Fatal("live execution did not return a command")
+	}
+	// Deliberately do not run cmd: the second execution is still in flight.
+	pressKey(m, tea.KeyEscape, "")
+
+	if m.view != "catalog" {
+		t.Fatalf("view = %q, want catalog", m.view)
+	}
+	if got := m.actions["claude-code"]; got != domain.ActionRemove {
+		t.Fatalf("actions[claude-code] = %q, want remove still queued", got)
+	}
+	if refreshes != 1 {
+		t.Fatalf("refreshes = %d, want 1 (no refresh while running)", refreshes)
+	}
+}
+
+// TestExecutionFinishPreservesActionChangedDuringRun verifies that a
+// queued action edited while a run continues in the background is not
+// deleted when the originally executed action succeeds.
+func TestExecutionFinishPreservesActionChangedDuringRun(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewModel(Options{
+		Catalog: cat,
+		Width:   120,
+		Height:  40,
+		States: map[string]domain.ToolState{
+			"claude-code": {InstalledVersion: "1.0.0", LatestVersion: "2.0.0"},
+		},
+		Actions:       map[string]domain.DesiredAction{"claude-code": domain.ActionUpdate},
+		MiseInstalled: true,
+		OnExecute: func(
+			_ context.Context, plan domain.ActionPlan, _ func(engine.StepEvent),
+		) engine.PlanResult {
+			steps := plan.Steps()
+			results := make([]engine.StepResult, 0, len(steps))
+			for _, step := range steps {
+				results = append(results, engine.StepResult{Step: step, Success: true})
+			}
+			return engine.PlanResult{StartedAt: time.Now(), FinishedAt: time.Now(), Steps: results}
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, cmd := m.beginExecution()
+	// The user queues a removal for the same tool while the update runs.
+	m.actions["claude-code"] = domain.ActionRemove
+	m.rebuildPlan()
+	drainCommands(t, m, cmd)
+
+	if got := m.actions["claude-code"]; got != domain.ActionRemove {
+		t.Fatalf("actions[claude-code] = %q, want remove preserved", got)
+	}
+}
+
+// TestExecutionReturnBeforeLiveResultKeepsPlan verifies that terminal
+// step rows alone do not finish a live run: until the runner result
+// arrives (post-step cleanup may still be running), Esc keeps the plan
+// and starts no refresh.
+func TestExecutionReturnBeforeLiveResultKeepsPlan(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshes := 0
+	m, err := NewModel(Options{
+		Catalog: cat,
+		Width:   120,
+		Height:  40,
+		States: map[string]domain.ToolState{
+			"claude-code": {InstalledVersion: "1.0.0", LatestVersion: "2.0.0"},
+		},
+		Actions:       map[string]domain.DesiredAction{"claude-code": domain.ActionUpdate},
+		MiseInstalled: true,
+		OnRefresh: func(context.Context) (map[string]domain.ToolState, error) {
+			refreshes++
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m.startExecution()
+	m.view = "applying"
+	m.applyStepProgress(StepProgressMsg{Index: 0, Status: StepDone, Elapsed: "1.0s"})
+	pressKey(m, tea.KeyEscape, "")
+
+	if m.view != "catalog" {
+		t.Fatalf("view = %q, want catalog", m.view)
+	}
+	if got := m.actions["claude-code"]; got != domain.ActionUpdate {
+		t.Fatalf("actions[claude-code] = %q, want update still queued", got)
+	}
+	if refreshes != 0 {
+		t.Fatalf("refreshes = %d, want 0 before the live result arrives", refreshes)
+	}
+}
+
+// TestExecutionReturnDefersRefreshUntilCurrentRefreshEnds verifies that
+// returning while another refresh is in flight owes a fresh inspection:
+// when that refresh lands with its pre-execution snapshot, a new refresh
+// runs so the catalog ends on post-update state.
+func TestExecutionReturnDefersRefreshUntilCurrentRefreshEnds(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshes := 0
+	m, err := NewModel(Options{
+		Catalog: cat,
+		Width:   120,
+		Height:  40,
+		States: map[string]domain.ToolState{
+			"claude-code": {InstalledVersion: "1.0.0", LatestVersion: "2.0.0"},
+		},
+		Actions:       map[string]domain.DesiredAction{"claude-code": domain.ActionUpdate},
+		MiseInstalled: true,
+		OnExecute: func(
+			_ context.Context, plan domain.ActionPlan, _ func(engine.StepEvent),
+		) engine.PlanResult {
+			steps := plan.Steps()
+			results := make([]engine.StepResult, 0, len(steps))
+			for _, step := range steps {
+				results = append(results, engine.StepResult{Step: step, Success: true})
+			}
+			return engine.PlanResult{StartedAt: time.Now(), FinishedAt: time.Now(), Steps: results}
+		},
+		OnRefresh: func(context.Context) (map[string]domain.ToolState, error) {
+			refreshes++
+			return map[string]domain.ToolState{
+				"claude-code": {InstalledVersion: "2.0.0", LatestVersion: "2.0.0"},
+			}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, cmd := m.beginExecution()
+	drainCommands(t, m, cmd)
+
+	// A refresh started before the execution is still in flight.
+	m.refreshing = true
+	if cmd := pressKey(m, tea.KeyEscape, ""); cmd != nil {
+		t.Fatal("return started a second refresh while one was in flight")
+	}
+	if refreshes != 0 {
+		t.Fatalf("refreshes = %d, want 0 while the first refresh runs", refreshes)
+	}
+
+	// The in-flight refresh lands with the pre-execution snapshot; the
+	// owed post-execution refresh must now run.
+	_, cmd = m.Update(refreshDoneMsg{states: map[string]domain.ToolState{
+		"claude-code": {InstalledVersion: "1.0.0", LatestVersion: "2.0.0"},
+	}})
+	drainCommands(t, m, cmd)
+
+	if refreshes != 1 {
+		t.Fatalf("refreshes = %d, want 1 owed refresh after the first lands", refreshes)
+	}
+	if got := m.states["claude-code"].InstalledVersion; got != "2.0.0" {
+		t.Fatalf("installed version = %q, want post-update 2.0.0", got)
+	}
+}
+
+// TestExecutionReturnWhileRefreshStreamDrains verifies the owed
+// post-execution refresh waits for the previous refresh's event stream
+// to close: the done message alone must not start it (a late
+// stream-closed message would clear the new stream), and the
+// stream-closed message must not lose it.
+func TestExecutionReturnWhileRefreshStreamDrains(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshes := 0
+	m, err := NewModel(Options{
+		Catalog: cat,
+		Width:   120,
+		Height:  40,
+		States: map[string]domain.ToolState{
+			"claude-code": {InstalledVersion: "1.0.0", LatestVersion: "2.0.0"},
+		},
+		Actions:       map[string]domain.DesiredAction{"claude-code": domain.ActionUpdate},
+		MiseInstalled: true,
+		OnExecute: func(
+			_ context.Context, plan domain.ActionPlan, _ func(engine.StepEvent),
+		) engine.PlanResult {
+			steps := plan.Steps()
+			results := make([]engine.StepResult, 0, len(steps))
+			for _, step := range steps {
+				results = append(results, engine.StepResult{Step: step, Success: true})
+			}
+			return engine.PlanResult{StartedAt: time.Now(), FinishedAt: time.Now(), Steps: results}
+		},
+		OnRefresh: func(context.Context) (map[string]domain.ToolState, error) {
+			refreshes++
+			return map[string]domain.ToolState{
+				"claude-code": {InstalledVersion: "2.0.0", LatestVersion: "2.0.0"},
+			}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, cmd := m.beginExecution()
+	drainCommands(t, m, cmd)
+
+	// The previous refresh has finished scanning but its event stream
+	// has not closed yet.
+	m.refreshEvents = make(chan refreshProgressMsg, 1)
+	if cmd := pressKey(m, tea.KeyEscape, ""); cmd != nil {
+		t.Fatal("return started a refresh while the old stream was draining")
+	}
+
+	// Its done message lands with the pre-execution snapshot; the owed
+	// refresh still waits for the stream to close.
+	_, cmd = m.Update(refreshDoneMsg{states: map[string]domain.ToolState{
+		"claude-code": {InstalledVersion: "1.0.0", LatestVersion: "2.0.0"},
+	}})
+	if cmd != nil {
+		t.Fatal("refresh done started the owed refresh before the stream closed")
+	}
+	if refreshes != 0 {
+		t.Fatalf("refreshes = %d, want 0 until the stream closes", refreshes)
+	}
+
+	_, cmd = m.Update(refreshStreamClosedMsg{})
+	drainCommands(t, m, cmd)
+	if refreshes != 1 {
+		t.Fatalf("refreshes = %d, want 1 owed refresh after the stream closes", refreshes)
+	}
+	if got := m.states["claude-code"].InstalledVersion; got != "2.0.0" {
+		t.Fatalf("installed version = %q, want post-update 2.0.0", got)
+	}
+}
+
+// TestExecutionFinishInBackgroundRefreshesCatalog verifies that a run
+// finishing after the user already left the execution view refreshes
+// the catalog at finish time: no return-to-catalog moment is left to
+// trigger it, so without this the cleared plan would sit next to
+// pre-update versions.
+func TestExecutionFinishInBackgroundRefreshesCatalog(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshes := 0
+	m, err := NewModel(Options{
+		Catalog: cat,
+		Width:   120,
+		Height:  40,
+		States: map[string]domain.ToolState{
+			"claude-code": {InstalledVersion: "1.0.0", LatestVersion: "2.0.0"},
+		},
+		Actions:       map[string]domain.DesiredAction{"claude-code": domain.ActionUpdate},
+		MiseInstalled: true,
+		OnExecute: func(
+			_ context.Context, plan domain.ActionPlan, _ func(engine.StepEvent),
+		) engine.PlanResult {
+			steps := plan.Steps()
+			results := make([]engine.StepResult, 0, len(steps))
+			for _, step := range steps {
+				results = append(results, engine.StepResult{Step: step, Success: true})
+			}
+			return engine.PlanResult{StartedAt: time.Now(), FinishedAt: time.Now(), Steps: results}
+		},
+		OnRefresh: func(context.Context) (map[string]domain.ToolState, error) {
+			refreshes++
+			return map[string]domain.ToolState{
+				"claude-code": {InstalledVersion: "2.0.0", LatestVersion: "2.0.0"},
+			}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, cmd := m.beginExecution()
+	// Leave while the run is in flight, then let it finish.
+	pressKey(m, tea.KeyEscape, "")
+	if m.view != "catalog" {
+		t.Fatalf("view = %q, want catalog", m.view)
+	}
+	drainCommands(t, m, cmd)
+
+	if refreshes != 1 {
+		t.Fatalf("refreshes = %d, want 1 when the background run finishes", refreshes)
+	}
+	if len(m.actions) != 0 {
+		t.Fatalf("actions = %v, want plan reset", m.actions)
+	}
+	if got := m.states["claude-code"].InstalledVersion; got != "2.0.0" {
+		t.Fatalf("installed version = %q, want post-update 2.0.0", got)
+	}
+}
+
 // TestPlanStrayRemovalToggle verifies [s] in the plan review opts in to
 // stray removal: the plan handed to the executor carries RemoveStrays,
 // and the finish notice reports the removed strays.

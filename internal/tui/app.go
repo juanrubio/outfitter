@@ -203,12 +203,15 @@ type Model struct {
 	refreshTotal   int
 	spinnerIdx     int
 	refreshEvents  chan refreshProgressMsg
-	onRefresh      func(context.Context) (map[string]domain.ToolState, error)
-	onExecute      func(context.Context, domain.ActionPlan, func(engine.StepEvent)) engine.PlanResult
-	execCancel     context.CancelFunc
-	liveEvents     chan engine.StepEvent
-	liveResult     *engine.PlanResult
-	lastLogPath    string
+	// execRefreshPending records that a post-execution refresh is owed
+	// once the refresh already in flight completes.
+	execRefreshPending bool
+	onRefresh          func(context.Context) (map[string]domain.ToolState, error)
+	onExecute          func(context.Context, domain.ActionPlan, func(engine.StepEvent)) engine.PlanResult
+	execCancel         context.CancelFunc
+	liveEvents         chan engine.StepEvent
+	liveResult         *engine.PlanResult
+	lastLogPath        string
 }
 
 // NewModel builds a model with defaults suitable for the offline demo or a
@@ -465,8 +468,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyLiveEvent(msg.event)
 		return m, waitForLiveEvent(m.liveEvents)
 	case livePlanDoneMsg:
-		m.finishLiveExecution(msg.result)
-		return m, nil
+		return m, m.finishLiveExecution(msg.result)
 	case liveStreamClosedMsg:
 		m.liveEvents = nil
 		return m, nil
@@ -475,9 +477,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitForRefreshEvent(m.refreshEvents)
 	case refreshStreamClosedMsg:
 		m.refreshEvents = nil
+		if m.execRefreshPending && !m.refreshing {
+			m.execRefreshPending = false
+			return m, m.startRefresh()
+		}
 		return m, nil
 	case refreshDoneMsg:
 		m.applyRefresh(msg)
+		// Start the owed refresh only once the previous refresh's
+		// event stream has closed too; starting earlier would let a
+		// late stream-closed message clear the new stream's channel.
+		// When a stream is still open, refreshStreamClosedMsg starts
+		// the owed refresh instead.
+		if m.execRefreshPending && m.refreshEvents == nil {
+			m.execRefreshPending = false
+			return m, m.startRefresh()
+		}
 		return m, nil
 	case selfUpdateDoneMsg:
 		m.applySelfUpdate(msg)
@@ -532,6 +547,7 @@ func (m *Model) updateKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		switch keystroke {
 		case "esc", "q":
 			m.view = "catalog"
+			return m, m.afterExecutionReturn()
 		case "l":
 			if m.lastLogPath != "" {
 				m.notice = "Execution log: " + m.lastLogPath
@@ -1476,6 +1492,7 @@ func (m *Model) rebuildPlan() {
 }
 
 func (m *Model) startExecution() {
+	m.liveResult = nil
 	steps := m.plan.Steps()
 	m.execSteps = make([]executionStep, 0, len(steps))
 	for index, step := range steps {
@@ -1610,11 +1627,12 @@ func (m *Model) applyLiveEvent(event engine.StepEvent) {
 	})
 }
 
-func (m *Model) finishLiveExecution(result engine.PlanResult) {
+func (m *Model) finishLiveExecution(result engine.PlanResult) tea.Cmd {
 	m.liveResult = &result
 	m.lastLogPath = result.LogPath
 	m.execCancel = nil
 	m.removeStrays = false
+	m.clearSucceededActions()
 
 	straySuffix := ""
 	removedStrays, failedStrays := 0, 0
@@ -1646,10 +1664,113 @@ func (m *Model) finishLiveExecution(result engine.PlanResult) {
 	if result.LogPath != "" {
 		m.notice = fmt.Sprintf("Execution finished: %d succeeded, %d failed%s · log %s",
 			result.Succeeded(), result.Failed(), straySuffix, result.LogPath)
-		return
+	} else {
+		m.notice = fmt.Sprintf("Execution finished: %d succeeded, %d failed%s",
+			result.Succeeded(), result.Failed(), straySuffix)
 	}
-	m.notice = fmt.Sprintf("Execution finished: %d succeeded, %d failed%s",
-		result.Succeeded(), result.Failed(), straySuffix)
+
+	// When the user already left the execution view, the run finished
+	// in the background and no return-to-catalog moment is left to
+	// trigger the refresh: schedule it now. While the user is still
+	// watching the execution summary, afterExecutionReturn schedules
+	// it when they leave.
+	if m.view != "applying" && result.Succeeded() > 0 {
+		return m.schedulePostExecutionRefresh()
+	}
+	return nil
+}
+
+// executionOutcome reports whether the current execution has finished and
+// how many of its steps succeeded or failed. Live runs are finished only
+// once the runner result arrives: terminal step events can precede
+// post-step work such as stray cleanup, so the rows alone do not prove
+// the run is over. The offline demo, which has no runner, reads the step
+// rows it advanced manually.
+func (m *Model) executionOutcome() (finished bool, succeeded, failed int) {
+	if m.liveResult != nil {
+		return true, m.liveResult.Succeeded(), m.liveResult.Failed()
+	}
+	if !m.demo || len(m.execSteps) == 0 {
+		return false, 0, 0
+	}
+	for _, step := range m.execSteps {
+		switch step.status {
+		case StepDone:
+			succeeded++
+		case StepFailed:
+			failed++
+		default:
+			return false, succeeded, failed
+		}
+	}
+	return true, succeeded, failed
+}
+
+// clearSucceededActions drops the queued action of every tool whose step
+// succeeded, so a finished (or partially finished) plan no longer shows
+// work that is already on disk. Failed steps keep their action so the
+// user can retry them. An action is dropped only when it still matches
+// the action that was executed: the user may have queued something new
+// for the same tool while the run continued in the background, and that
+// newer edit must survive.
+func (m *Model) clearSucceededActions() {
+	cleared := false
+	drop := func(toolID string, executed domain.DesiredAction) {
+		if current, ok := m.actions[toolID]; ok && current == executed {
+			delete(m.actions, toolID)
+			cleared = true
+		}
+	}
+	if m.liveResult != nil {
+		for _, result := range m.liveResult.Steps {
+			if result.Success {
+				drop(result.Step.Tool.ID, result.Step.Action)
+			}
+		}
+	} else {
+		for _, step := range m.execSteps {
+			if step.status == StepDone {
+				drop(step.step.Tool.ID, step.step.Action)
+			}
+		}
+	}
+	if cleared {
+		m.rebuildPlan()
+		m.ensureSelection()
+	}
+}
+
+// afterExecutionReturn runs when the user leaves the execution view for
+// the catalog. Once a run has finished with at least one success, the
+// plan is reset for the succeeded tools and the catalog state is
+// re-inspected so the main screen shows the post-update state instead of
+// the pre-update snapshot. Leaving while a run is still in progress (or
+// after a run where nothing succeeded) changes nothing, so the run can
+// continue in the background and failed work stays queued.
+func (m *Model) afterExecutionReturn() tea.Cmd {
+	finished, succeeded, _ := m.executionOutcome()
+	if !finished || succeeded == 0 {
+		return nil
+	}
+	m.clearSucceededActions()
+	return m.schedulePostExecutionRefresh()
+}
+
+// schedulePostExecutionRefresh starts the catalog re-inspection owed
+// after a run succeeded, or records it as pending when a refresh is
+// already in flight (or still draining its event stream): that refresh
+// may install a pre-execution snapshot when it lands, so the owed
+// inspection runs once it completes instead of leaving the catalog
+// stale. Snapshot models without a refresh source skip the refresh.
+func (m *Model) schedulePostExecutionRefresh() tea.Cmd {
+	if m.demo || (!m.autoRefresh && m.onRefresh == nil) {
+		return nil
+	}
+	if m.refreshing || m.refreshEvents != nil {
+		m.execRefreshPending = true
+		return nil
+	}
+	return m.startRefresh()
 }
 
 func (m *Model) cancelExecution() {
@@ -1688,6 +1809,9 @@ func (m *Model) startRefresh() tea.Cmd {
 	if m.refreshEvents != nil {
 		return nil
 	}
+	// A refresh that actually starts satisfies any owed
+	// post-execution inspection.
+	m.execRefreshPending = false
 	m.beginRefreshState()
 	ctx := m.baseCtx
 	if ctx == nil {

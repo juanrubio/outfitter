@@ -152,6 +152,7 @@ While applying the plan:
 - Shows a progress bar (`3 of 6 completed`) and per-tool status rows (`✓ Completed in 2.1s`, `⠋ Running...`, `· Queued`, `✗ Failed`).
 - Displays a live tail of the active tool's stdout/stderr at the bottom of the screen so you are never staring at an opaque spinner.
 - If a tool fails, Outfitter records the error, continues with independent tools, and stays open on the summary screen so you can inspect the failure log (`l`) or retry failed items (`r`).
+- When the run has finished, each succeeded tool's queued action is cleared from the Pending Plan (failed tools stay queued for a retry). Pressing `Esc`/`q` to return to the catalog after at least one success also re-inspects installed and upstream state, so the main screen shows the post-update catalog instead of the pre-update snapshot. Leaving while the run is still in progress changes neither the plan nor the catalog state at that moment; if the background run later finishes with successes, the catalog is re-inspected then.
 
 ### 4.5 Outfitter Self-Update Modal (`O`)
 
