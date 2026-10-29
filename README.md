@@ -72,7 +72,7 @@ Every mutating command first builds the ordered execution plan. Preview safely w
 
 ## Customizing your catalog (`catalog.toml`)
 
-Outfitter ships with a built-in catalog of **48 curated tools** across 4 categories and 4 profiles (`desktop`, `server`, `harnesses`, `minimal`), embedded in the binary. There is nothing to generate before your first run: Outfitter works out of the box with those defaults.
+Outfitter ships with a built-in catalog of **49 curated tools** across 4 categories and 4 profiles (`desktop`, `server`, `harnesses`, `minimal`), embedded in the binary. There is nothing to generate before your first run: Outfitter works out of the box with those defaults.
 
 A **user catalog** is optional. Use one only when you want to override a built-in tool, add your own tools, disable a tool, or define a custom profile. A user catalog declares how it combines with the built-in catalog in an optional header:
 

@@ -104,7 +104,7 @@ func TestCatalogNoticesAndLabels(t *testing.T) {
 		t.Fatalf("built-in label = %q, want empty", got)
 	}
 	pressKey(m, 'c', "c")
-	if !strings.Contains(m.notice, "built-in") || !strings.Contains(m.notice, "48 tools") {
+	if !strings.Contains(m.notice, "built-in") || !strings.Contains(m.notice, "49 tools") {
 		t.Fatalf("built-in notice = %q", m.notice)
 	}
 
@@ -173,7 +173,7 @@ func TestIgnoreUserCatalogOption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(m.catalog.Tools) != 48 || m.catalog.Meta.Source != catalog.SourceEmbedded {
+	if len(m.catalog.Tools) != 49 || m.catalog.Meta.Source != catalog.SourceEmbedded {
 		t.Fatalf("ignored catalog tools=%d source=%q", len(m.catalog.Tools), m.catalog.Meta.Source)
 	}
 	if _, err := NewModel(Options{

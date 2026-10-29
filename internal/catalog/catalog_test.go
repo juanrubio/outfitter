@@ -21,12 +21,12 @@ func TestLoadDefault(t *testing.T) {
 		t.Fatalf("settings = %#v, want %#v", cat.Settings, domain.DefaultSettings())
 	}
 
-	if len(cat.Tools) != 48 {
-		t.Fatalf("tools = %d, want 48", len(cat.Tools))
+	if len(cat.Tools) != 49 {
+		t.Fatalf("tools = %d, want 49", len(cat.Tools))
 	}
 	wantIDs := []string{
 		"claude-code", "codex", "muse", "antigravity-cli", "opencode", "pi", "gemini-cli", "copilot-cli",
-		"boardwalk", "trailmark", "quotary", "codexbar", "mercadona-cli",
+		"boardwalk", "trailmark", "quotary", "codexbar", "mercadona-cli", "openusage",
 		"tmux", "byobu", "hive", "herdr", "gh", "gh-dash", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
 		"zoxide", "eza", "bat", "dust", "broot", "tig", "htop", "porthole",
 		"browser-use", "openclaw", "mcporter", "oracle", "summarize", "wacli", "twitter-cli", "hcloud", "aws-cli", "cloudflare-cf", "wrangler", "tailscale", "visidata",
@@ -50,7 +50,7 @@ func TestLoadDefault(t *testing.T) {
 		count int
 	}{
 		{"harnesses", 1, "CODING HARNESSES", 8},
-		{"ai-tuis", 2, "AI TUIS & PERSONAL TOOLS", 5},
+		{"ai-tuis", 2, "AI TUIS & PERSONAL TOOLS", 6},
 		{"terminal", 3, "TERMINAL & SESSION MANAGEMENT", 22},
 		{"utilities", 4, "AGENT & CLI UTILITIES", 13},
 	}
@@ -65,8 +65,8 @@ func TestLoadDefault(t *testing.T) {
 	}
 
 	profiles := map[string]int{
-		"desktop":   48,
-		"server":    38,
+		"desktop":   49,
+		"server":    39,
 		"harnesses": 8,
 		"minimal":   10,
 	}
@@ -81,11 +81,11 @@ func TestLoadDefault(t *testing.T) {
 		}
 	}
 
-	if got := len(cat.Profiles[0].Tools); got != 48 {
-		t.Fatalf("desktop profile has %d tools, want 48", got)
+	if got := len(cat.Profiles[0].Tools); got != 49 {
+		t.Fatalf("desktop profile has %d tools, want 49", got)
 	}
-	if got := len(cat.Profiles[1].Tools); got != 38 {
-		t.Fatalf("server profile has %d tools, want 38", got)
+	if got := len(cat.Profiles[1].Tools); got != 39 {
+		t.Fatalf("server profile has %d tools, want 39", got)
 	}
 	if got := len(cat.Profiles[2].Tools); got != 8 {
 		t.Fatalf("harnesses profile has %d tools, want 8", got)
@@ -144,6 +144,7 @@ func TestLoadDefault(t *testing.T) {
 	assertTool(t, cat, "boardwalk", "Boardwalk", "boardwalk", "ai-tuis", domain.BackendMiseUbi, "juanrubio/boardwalk")
 	assertTool(t, cat, "trailmark", "Trailmark", "trailmark", "ai-tuis", domain.BackendMiseUbi, "juanrubio/trailmark")
 	assertTool(t, cat, "quotary", "Quotary", "quotary", "ai-tuis", domain.BackendMiseUbi, "juanrubio/quotary")
+	assertTool(t, cat, "openusage", "OpenUsage", "openusage", "ai-tuis", domain.BackendMiseGitHub, "janekbaraniewski/openusage")
 	assertTool(t, cat, "tmux", "tmux", "tmux", "terminal", domain.BackendAPT, "tmux")
 	assertTool(t, cat, "browser-use", "browser-use", "browser-use", "utilities", domain.BackendUV, "browser-use")
 
@@ -225,6 +226,27 @@ func TestPersonalToolsVersionRegex(t *testing.T) {
 	}
 }
 
+// Recorded --version output of the real openusage binary (v0.26.1), so
+// a catalog version_regex drift against upstream fails here.
+func TestOpenUsageVersionRegex(t *testing.T) {
+	cat, err := catalog.LoadDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool, ok := cat.ToolByID("openusage")
+	if !ok {
+		t.Fatal("tool \"openusage\" missing")
+	}
+	re, err := regexp.Compile(tool.VersionRegex)
+	if err != nil {
+		t.Fatalf("openusage version regex: %v", err)
+	}
+	match := re.FindStringSubmatch("openusage version 0.26.1")
+	if len(match) != 2 || match[1] != "0.26.1" {
+		t.Errorf("openusage regex %q does not capture 0.26.1 from the real --version output", tool.VersionRegex)
+	}
+}
+
 func TestLoadFromBytesProductExample(t *testing.T) {
 	user := `
 [settings]
@@ -260,8 +282,8 @@ tools = ["tmux", "gh", "claude-code", "codex", "openclaw", "boardwalk", "ripgrep
 		t.Fatal(err)
 	}
 
-	if len(cat.Tools) != 49 {
-		t.Fatalf("tools = %d, want 49", len(cat.Tools))
+	if len(cat.Tools) != 50 {
+		t.Fatalf("tools = %d, want 50", len(cat.Tools))
 	}
 	if len(cat.Categories) != 4 {
 		t.Fatalf("categories = %d, want 4", len(cat.Categories))
@@ -368,8 +390,8 @@ disabled = true
 	if _, ok := cat.ToolByID("btop"); ok {
 		t.Fatal("disabled btop should not be active")
 	}
-	if len(cat.Tools) != 47 {
-		t.Fatalf("tools = %d, want 47", len(cat.Tools))
+	if len(cat.Tools) != 48 {
+		t.Fatalf("tools = %d, want 48", len(cat.Tools))
 	}
 
 	for _, profileID := range []string{"desktop", "server"} {
@@ -650,8 +672,8 @@ func TestLoadFromEmptyBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cat.Tools) != 48 {
-		t.Fatalf("tools = %d, want 48", len(cat.Tools))
+	if len(cat.Tools) != 49 {
+		t.Fatalf("tools = %d, want 49", len(cat.Tools))
 	}
 }
 
@@ -663,8 +685,8 @@ func TestLoadUsesDefaultUserCatalogWhenPresent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cat.Tools) != 48 {
-		t.Fatalf("tools without user catalog = %d, want 48", len(cat.Tools))
+	if len(cat.Tools) != 49 {
+		t.Fatalf("tools without user catalog = %d, want 49", len(cat.Tools))
 	}
 
 	dir := filepath.Join(home, ".config", "outfitter")

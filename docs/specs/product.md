@@ -86,7 +86,7 @@ When Outfitter starts and detects that `mise` is not on `PATH` (and not at `~/.l
 
 ## 4. Built-In Opinionated Catalog
 
-Outfitter ships with 48 curated tools across 4 categories and 4 preset profiles. The embedded source of truth is `internal/catalog/default_catalog.toml`; `outfitter catalog show` reports the effective counts and `outfitter catalog export` prints the same catalog.
+Outfitter ships with 49 curated tools across 4 categories and 4 preset profiles. The embedded source of truth is `internal/catalog/default_catalog.toml`; `outfitter catalog show` reports the effective counts and `outfitter catalog export` prints the same catalog.
 
 ### Category 1: Coding Harnesses (`harnesses`)
 | ID | Name | Binary | Backend | Default Profiles | Description |

@@ -158,7 +158,7 @@ func TestHeaderDefaultsAndExtendMeta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cat.Meta.Mode != catalog.ModeExtend || cat.Meta.Name != "Tweaks" || len(cat.Tools) != 48 {
+	if cat.Meta.Mode != catalog.ModeExtend || cat.Meta.Name != "Tweaks" || len(cat.Tools) != 49 {
 		t.Fatalf("extend meta = %#v tools=%d", cat.Meta, len(cat.Tools))
 	}
 	if cat.Meta.EffectiveName() != "Tweaks" {
@@ -286,7 +286,7 @@ func TestLoadWithOptionsHomeAndIgnore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cat.Tools) != 48 || cat.Meta.Source != catalog.SourceEmbedded {
+	if len(cat.Tools) != 49 || cat.Meta.Source != catalog.SourceEmbedded {
 		t.Fatalf("ignored cat meta=%#v tools=%d", cat.Meta, len(cat.Tools))
 	}
 
@@ -298,7 +298,7 @@ func TestLoadWithOptionsHomeAndIgnore(t *testing.T) {
 		t.Fatal("broken default catalog should error")
 	}
 	cat, err = catalog.LoadWithOptions(catalog.LoadOptions{HomeDir: home, IgnoreUserCatalog: true})
-	if err != nil || len(cat.Tools) != 48 {
+	if err != nil || len(cat.Tools) != 49 {
 		t.Fatalf("ignore broken: err=%v tools=%d", err, len(cat.Tools))
 	}
 
@@ -324,7 +324,7 @@ func TestTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(seeded.Tools) != 48 || len(seeded.Categories) != 4 || len(seeded.Profiles) != 4 {
+	if len(seeded.Tools) != 49 || len(seeded.Categories) != 4 || len(seeded.Profiles) != 4 {
 		t.Fatalf("seeded counts tools=%d cats=%d profiles=%d",
 			len(seeded.Tools), len(seeded.Categories), len(seeded.Profiles))
 	}
@@ -354,7 +354,7 @@ func TestTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(extend.Tools) != 48 || extend.Meta.Mode != catalog.ModeExtend {
+	if len(extend.Tools) != 49 || extend.Meta.Mode != catalog.ModeExtend {
 		t.Fatalf("extend template tools=%d meta=%#v", len(extend.Tools), extend.Meta)
 	}
 
@@ -369,7 +369,7 @@ func TestEmbeddedExportRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(parsed.Tools) != 48 || len(parsed.Categories) != 4 || len(parsed.Profiles) != 4 {
+	if len(parsed.Tools) != 49 || len(parsed.Categories) != 4 || len(parsed.Profiles) != 4 {
 		t.Fatalf("parsed counts tools=%d cats=%d profiles=%d",
 			len(parsed.Tools), len(parsed.Categories), len(parsed.Profiles))
 	}

@@ -76,8 +76,8 @@ func TestStatusReportsCachedSelfUpdateWithoutChangingJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &entries); err != nil {
 		t.Fatalf("status JSON should remain an entries array: %v", err)
 	}
-	if len(entries) != 48 {
-		t.Fatalf("status entries = %d, want 48", len(entries))
+	if len(entries) != 49 {
+		t.Fatalf("status entries = %d, want 49", len(entries))
 	}
 }
 

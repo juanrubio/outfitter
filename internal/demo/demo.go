@@ -104,6 +104,9 @@ var stateSpecs = map[string]stateSpec{
 		provenance: domain.ProvenanceMise,
 		detail:     "Managed by mise (npm:mercadona-cli)",
 	},
+	"openusage": {
+		latest: "0.26.1", provenance: domain.ProvenanceNone, detail: "Not installed",
+	},
 	"tmux": {
 		installed: "3.4-1ubuntu1", latest: "3.4-1ubuntu1", path: "/usr/bin/tmux",
 		provenance: domain.ProvenanceAPT, detail: "System package (apt)",

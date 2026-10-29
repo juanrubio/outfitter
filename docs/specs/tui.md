@@ -120,8 +120,8 @@ Every tool has an **Installed State** on disk and a **Desired State** in the TUI
 
 Pressing `p` opens the **Profile Selector** overlay, allowing you to outfit a machine in seconds:
 
-1. **Full Desktop (`desktop`) — 48 tools:** Every tool in the built-in catalog, across Coding Harnesses, AI TUIs & Personal Tools, Terminal & Session Management, and Agent & CLI Utilities.
-2. **Headless Server / VPS (`server`) — 38 tools:** The desktop set tuned for remote Ubuntu agent hosts (like a Hetzner VPS or home server). It omits ten desktop-oriented tools: `pi`, `gemini-cli`, `copilot-cli`, `quotary`, `codexbar`, `glow`, `browser-use`, `mcporter`, `oracle`, and `summarize`.
+1. **Full Desktop (`desktop`) — 49 tools:** Every tool in the built-in catalog, across Coding Harnesses, AI TUIs & Personal Tools, Terminal & Session Management, and Agent & CLI Utilities.
+2. **Headless Server / VPS (`server`) — 39 tools:** The desktop set tuned for remote Ubuntu agent hosts (like a Hetzner VPS or home server). It omits ten desktop-oriented tools: `pi`, `gemini-cli`, `copilot-cli`, `quotary`, `codexbar`, `glow`, `browser-use`, `mcporter`, `oracle`, and `summarize`.
 3. **Coding Harnesses Only (`harnesses`) — 8 tools:** `claude-code`, `codex`, `muse`, `antigravity-cli`, `opencode`, `pi`, `gemini-cli`, `copilot-cli`.
 4. **Minimal Core (`minimal`) — 10 tools:** `claude-code`, `codex`, `boardwalk`, `trailmark`, `tmux`, `gh`, `fzf`, `ripgrep`, `jq`, `zoxide`.
 

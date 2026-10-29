@@ -34,7 +34,7 @@ short = "Desktop"
 description = "Complete workstation rig: all coding harnesses, AI TUIs, terminal tools, and browser/MCP utilities."
 tools = [
   "claude-code", "codex", "muse", "antigravity-cli", "opencode", "pi", "gemini-cli", "copilot-cli",
-  "boardwalk", "trailmark", "quotary", "codexbar", "openclaw", "mercadona-cli",
+  "boardwalk", "trailmark", "quotary", "codexbar", "openclaw", "mercadona-cli", "openusage",
   "tmux", "byobu", "hive", "herdr", "gh", "gh-dash", "lazygit", "fzf", "delta", "glow", "ripgrep", "fd", "jq", "btop",
   "zoxide", "eza", "bat", "dust", "broot", "tig", "htop", "porthole",
   "browser-use", "mcporter", "oracle", "summarize", "wacli", "twitter-cli", "hcloud", "aws-cli", "cloudflare-cf", "wrangler", "tailscale", "visidata",
@@ -47,7 +47,7 @@ short = "Server"
 description = "Tuned for Ubuntu home servers & Hetzner VPS agent workers (no desktop GUI or browser dependencies)."
 tools = [
   "claude-code", "codex", "muse", "antigravity-cli", "opencode",
-  "boardwalk", "trailmark", "openclaw", "mercadona-cli",
+  "boardwalk", "trailmark", "openclaw", "mercadona-cli", "openusage",
   "tmux", "byobu", "hive", "herdr", "gh", "gh-dash", "lazygit", "fzf", "delta", "ripgrep", "fd", "jq", "btop",
   "zoxide", "eza", "bat", "dust", "broot", "tig", "htop", "porthole",
   "wacli", "twitter-cli", "hcloud", "aws-cli", "cloudflare-cf", "wrangler", "tailscale", "visidata",
@@ -282,6 +282,22 @@ update_cmd = "mise upgrade npm:mercadona-cli"
 remove_cmd = "mise unuse --global npm:mercadona-cli"
 version_args = ["--version"]
 version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[[tools]]
+id = "openusage"
+name = "OpenUsage"
+binary = "openusage"
+category = "ai-tuis"
+backend = "mise:github"
+package = "janekbaraniewski/openusage"
+sudo = false
+profiles = ["desktop", "server"]
+description = "Terminal dashboard for AI coding-tool usage, quota, and spend across Claude, Codex, Cursor, Copilot, Gemini, and OpenRouter."
+install_cmd = "mise use --global github:janekbaraniewski/openusage@latest"
+update_cmd = "mise upgrade github:janekbaraniewski/openusage"
+remove_cmd = "mise unuse --global github:janekbaraniewski/openusage"
+version_args = ["--version"]
+version_regex = 'openusage version ([0-9]+\.[0-9]+\.[0-9]+)'
 
 # Category 3: Terminal & Session Management
 

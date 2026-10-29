@@ -75,7 +75,7 @@ func TestCatalogInitSeeded(t *testing.T) {
 		t.Fatalf("seeded catalog lacks replace header:\n%s", content[:200])
 	}
 	report := runShowJSON(t, deps, "catalog", "show", "--json")
-	if report.Mode != "replace" || report.ToolCount != 48 || report.CategoryCount != 4 ||
+	if report.Mode != "replace" || report.ToolCount != 49 || report.CategoryCount != 4 ||
 		report.ProfileCount != 4 || report.UsesBuiltin || report.Path != path {
 		t.Fatalf("show report = %+v", report)
 	}
@@ -106,7 +106,7 @@ func TestCatalogInitExtendAndBlank(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &validateReport); err != nil {
 		t.Fatal(err)
 	}
-	if !validateReport.Valid || validateReport.Mode != "extend" || validateReport.ToolCount != 48 {
+	if !validateReport.Valid || validateReport.Mode != "extend" || validateReport.ToolCount != 49 {
 		t.Fatalf("validate report = %+v", validateReport)
 	}
 
@@ -172,7 +172,7 @@ func TestCatalogShowBuiltinExtendReplace(t *testing.T) {
 	deps, _ := testDeps(t)
 
 	report := runShowJSON(t, deps, "catalog", "show", "--json")
-	if report.Origin != "embedded" || !report.UsesBuiltin || report.ToolCount != 48 ||
+	if report.Origin != "embedded" || !report.UsesBuiltin || report.ToolCount != 49 ||
 		report.SchemaVersion != 1 || report.Path != "" {
 		t.Fatalf("built-in report = %+v", report)
 	}
@@ -180,7 +180,7 @@ func TestCatalogShowBuiltinExtendReplace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Name: Built-in catalog", "Mode: built-in", "Tools: 48"} {
+	for _, want := range []string{"Name: Built-in catalog", "Mode: built-in", "Tools: 49"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("show output missing %q:\n%s", want, out)
 		}
@@ -189,7 +189,7 @@ func TestCatalogShowBuiltinExtendReplace(t *testing.T) {
 	path := writeUserCatalog(t, deps, "[[tools]]\nid = \"btop\"\ndisabled = true\n")
 	report = runShowJSON(t, deps, "catalog", "show", "--json")
 	if report.Mode != "extend" || report.Origin != "user" || !report.UsesBuiltin ||
-		report.ToolCount != 47 || report.Path != path {
+		report.ToolCount != 48 || report.Path != path {
 		t.Fatalf("extend report = %+v", report)
 	}
 
@@ -222,7 +222,7 @@ func TestCatalogValidatePrecedenceAndFailures(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
 		t.Fatal(err)
 	}
-	if !report.Valid || report.Origin != "embedded" || report.ToolCount != 48 {
+	if !report.Valid || report.Origin != "embedded" || report.ToolCount != 49 {
 		t.Fatalf("built-in validate report = %+v", report)
 	}
 
@@ -276,8 +276,8 @@ func TestIgnoreUserCatalogAndConflicts(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &entries); err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 48 {
-		t.Fatalf("entries = %d, want 48 built-ins", len(entries))
+	if len(entries) != 49 {
+		t.Fatalf("entries = %d, want 49 built-ins", len(entries))
 	}
 
 	writeUserCatalog(t, deps, cliMinimalReplace)
@@ -298,7 +298,7 @@ func TestIgnoreUserCatalogAndConflicts(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &entries); err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 48 {
+	if len(entries) != 49 {
 		t.Fatalf("ignored replace entries = %d", len(entries))
 	}
 
